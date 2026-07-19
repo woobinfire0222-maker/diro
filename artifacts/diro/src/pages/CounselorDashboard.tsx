@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Search, Filter, MessageSquare, Play, CheckCircle } from "lucide-react";
+import { Search, MessageSquare, Play, CheckCircle, Code2, Loader2 } from "lucide-react";
 import { useGetOrders, useGetMe, Order, useUpdateOrder } from "@workspace/api-client-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { OrderStatusBadge } from "@/components/shared/OrderStatusBadge";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabase";
+
+type ExtendedOrder = Order & { developer_id?: string | null };
 
 export default function CounselorDashboard() {
   const [, setLocation] = useLocation();
@@ -18,19 +21,22 @@ export default function CounselorDashboard() {
   const [search, setSearch] = useState("");
   const updateOrderMutation = useUpdateOrder();
   const { toast } = useToast();
+  const [takingOverId, setTakingOverId] = useState<string | null>(null);
 
-  if (user?.role !== "counselor" && user?.role !== "admin") {
+  const isDeveloper = user?.role === "developer";
+  const isCounselor = user?.role === "counselor";
+  const isAdmin = user?.role === "admin";
+
+  if (!isCounselor && !isDeveloper && !isAdmin) {
     return <div className="p-8 text-center text-destructive">접근 권한이 없습니다.</div>;
   }
 
+  // Counselor: take a pending order
   const handleTakeOrder = async (orderId: string) => {
     try {
       await updateOrderMutation.mutateAsync({
         id: orderId,
-        data: {
-          status: "consulting",
-          counselor_id: user.id
-        }
+        data: { status: "consulting", counselor_id: user!.id }
       });
       toast({ title: "주문을 배정받았습니다." });
       refetch();
@@ -39,16 +45,48 @@ export default function CounselorDashboard() {
     }
   };
 
-  const filteredOrders = orders?.filter(o => 
-    o.server_name.toLowerCase().includes(search.toLowerCase()) || 
+  // Developer: take over a consulting order
+  const handleTakeoverOrder = async (orderId: string) => {
+    setTakingOverId(orderId);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({ developer_id: user!.id, status: "building" }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      toast({ title: "개발 담당으로 이어받았습니다." });
+      refetch();
+    } catch (e) {
+      toast({ variant: "destructive", title: "이어받기 실패" });
+    } finally {
+      setTakingOverId(null);
+    }
+  };
+
+  const extOrders = (orders || []) as ExtendedOrder[];
+
+  const filteredOrders = extOrders.filter(o =>
+    o.server_name.toLowerCase().includes(search.toLowerCase()) ||
     o.order_number.toLowerCase().includes(search.toLowerCase())
-  ) || [];
+  );
 
+  // ── Counselor tabs ──
   const pendingOrders = filteredOrders.filter(o => o.status === "pending");
-  const myOrders = filteredOrders.filter(o => o.counselor_id === user.id && o.status !== "completed");
-  const completedOrders = filteredOrders.filter(o => o.counselor_id === user.id && o.status === "completed");
+  const myConsultingOrders = filteredOrders.filter(o => o.counselor_id === user?.id && o.status !== "completed");
+  const completedOrders = filteredOrders.filter(o => o.counselor_id === user?.id && o.status === "completed");
 
-  const renderOrderCard = (order: Order, isMine: boolean) => (
+  // ── Developer tabs ──
+  const consultingToPickup = filteredOrders.filter(o => o.status === "consulting");
+  const myBuildingOrders = filteredOrders.filter(o => o.developer_id === user?.id && o.status !== "completed");
+  const devCompletedOrders = filteredOrders.filter(o => o.developer_id === user?.id && o.status === "completed");
+
+  const renderCounselorCard = (order: ExtendedOrder, isMine: boolean) => (
     <Card key={order.id} className="flex flex-col">
       <CardHeader className="pb-3">
         <div className="flex justify-between items-start mb-2">
@@ -95,15 +133,79 @@ export default function CounselorDashboard() {
     </Card>
   );
 
+  const renderDevCard = (order: ExtendedOrder, isMine: boolean) => (
+    <Card key={order.id} className="flex flex-col">
+      <CardHeader className="pb-3">
+        <div className="flex justify-between items-start mb-2">
+          <OrderStatusBadge status={order.status} />
+          <span className="text-xs font-mono bg-muted px-2 py-1 rounded">#{order.order_number}</span>
+        </div>
+        <CardTitle className="text-lg">{order.server_name}</CardTitle>
+        <div className="flex items-center gap-2 mt-2">
+          <Avatar className="h-6 w-6">
+            <AvatarImage src={order.user_avatar || undefined} />
+            <AvatarFallback>{order.user_username?.charAt(0) || 'U'}</AvatarFallback>
+          </Avatar>
+          <span className="text-sm text-muted-foreground">{order.user_display_name || order.user_username}</span>
+        </div>
+        {!isMine && order.counselor_username && (
+          <p className="text-xs text-muted-foreground mt-1">상담사: {order.counselor_username}</p>
+        )}
+      </CardHeader>
+      <CardContent className="flex-1">
+        <div className="grid grid-cols-2 gap-2 text-sm">
+          <div className="bg-secondary/50 p-2 rounded">
+            <span className="text-xs text-muted-foreground block">예산</span>
+            <span className="font-medium">{order.budget.toLocaleString()}원</span>
+          </div>
+          <div className="bg-secondary/50 p-2 rounded">
+            <span className="text-xs text-muted-foreground block">유형</span>
+            <span className="font-medium">{order.atmosphere}</span>
+          </div>
+        </div>
+      </CardContent>
+      <CardFooter className="pt-0 border-t mt-auto p-4 gap-2">
+        {isMine ? (
+          <Button variant="outline" className="w-full" onClick={() => setLocation(`/chat/${order.id}`)}>
+            <MessageSquare className="mr-2 h-4 w-4" /> 채팅 (가격 설정 가능)
+          </Button>
+        ) : (
+          <Button
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+            onClick={() => handleTakeoverOrder(order.id)}
+            disabled={takingOverId === order.id}
+          >
+            {takingOverId === order.id ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Code2 className="mr-2 h-4 w-4" />
+            )}
+            개발 이어받기
+          </Button>
+        )}
+      </CardFooter>
+    </Card>
+  );
+
+  const EmptyState = ({ text }: { text: string }) => (
+    <div className="col-span-full py-12 text-center text-muted-foreground border rounded-xl">{text}</div>
+  );
+
   return (
     <div className="space-y-6 animate-in fade-in">
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-primary flex items-center gap-2">
-            <span className="bg-primary text-primary-foreground text-xs px-2 py-1 rounded">상담원</span>
+            <span className={`text-xs px-2 py-1 rounded ${isDeveloper ? "bg-emerald-500 text-white" : "bg-primary text-primary-foreground"}`}>
+              {isDeveloper ? "개발자" : isAdmin ? "관리자" : "상담원"}
+            </span>
             DIRO 파트너 대시보드
           </h1>
-          <p className="text-muted-foreground">고객의 요청을 확인하고 최고의 서버를 제작해주세요.</p>
+          <p className="text-muted-foreground">
+            {isDeveloper
+              ? "상담이 완료된 주문을 이어받아 서버를 제작하고 가격을 설정하세요."
+              : "고객의 요청을 확인하고 최고의 서버를 제작해주세요."}
+          </p>
         </div>
         
         <div className="flex items-center gap-2 w-full md:w-auto">
@@ -120,37 +222,75 @@ export default function CounselorDashboard() {
         </div>
       </div>
 
-      <Tabs defaultValue="mine" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 max-w-md">
-          <TabsTrigger value="mine">내 담당 진행중 ({myOrders.length})</TabsTrigger>
-          <TabsTrigger value="pending">새로운 요청 ({pendingOrders.length})</TabsTrigger>
-          <TabsTrigger value="completed">완료됨 ({completedOrders.length})</TabsTrigger>
-        </TabsList>
-        
-        <TabsContent value="mine" className="mt-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {myOrders.length > 0 ? myOrders.map(o => renderOrderCard(o, true)) : (
-              <div className="col-span-full py-12 text-center text-muted-foreground border rounded-xl">진행 중인 담당 프로젝트가 없습니다.</div>
-            )}
-          </div>
-        </TabsContent>
-        
-        <TabsContent value="pending" className="mt-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {pendingOrders.length > 0 ? pendingOrders.map(o => renderOrderCard(o, false)) : (
-              <div className="col-span-full py-12 text-center text-muted-foreground border rounded-xl">대기 중인 새로운 요청이 없습니다.</div>
-            )}
-          </div>
-        </TabsContent>
-        
-        <TabsContent value="completed" className="mt-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {completedOrders.length > 0 ? completedOrders.map(o => renderOrderCard(o, true)) : (
-              <div className="col-span-full py-12 text-center text-muted-foreground border rounded-xl">완료된 프로젝트가 없습니다.</div>
-            )}
-          </div>
-        </TabsContent>
-      </Tabs>
+      {/* ── Developer View ── */}
+      {isDeveloper ? (
+        <Tabs defaultValue="pickup" className="w-full">
+          <TabsList className="grid w-full grid-cols-3 max-w-md">
+            <TabsTrigger value="pickup">이어받기 ({consultingToPickup.length})</TabsTrigger>
+            <TabsTrigger value="mine">내 개발 진행중 ({myBuildingOrders.length})</TabsTrigger>
+            <TabsTrigger value="done">완료됨 ({devCompletedOrders.length})</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="pickup" className="mt-6">
+            <p className="text-sm text-muted-foreground mb-4">상담이 완료되어 개발을 기다리는 주문입니다. 이어받기를 클릭하면 내 담당이 됩니다.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {consultingToPickup.length > 0
+                ? consultingToPickup.map(o => renderDevCard(o, false))
+                : <EmptyState text="이어받을 수 있는 상담 완료 주문이 없습니다." />}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="mine" className="mt-6">
+            <p className="text-sm text-muted-foreground mb-4">채팅 버튼을 눌러 신청자와 소통하고, 채팅 화면에서 가격을 확정하세요.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {myBuildingOrders.length > 0
+                ? myBuildingOrders.map(o => renderDevCard(o, true))
+                : <EmptyState text="진행 중인 개발 프로젝트가 없습니다." />}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="done" className="mt-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {devCompletedOrders.length > 0
+                ? devCompletedOrders.map(o => renderDevCard(o, true))
+                : <EmptyState text="완료된 프로젝트가 없습니다." />}
+            </div>
+          </TabsContent>
+        </Tabs>
+      ) : (
+        /* ── Counselor / Admin View ── */
+        <Tabs defaultValue="mine" className="w-full">
+          <TabsList className="grid w-full grid-cols-3 max-w-md">
+            <TabsTrigger value="mine">내 담당 진행중 ({myConsultingOrders.length})</TabsTrigger>
+            <TabsTrigger value="pending">새로운 요청 ({pendingOrders.length})</TabsTrigger>
+            <TabsTrigger value="completed">완료됨 ({completedOrders.length})</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="mine" className="mt-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {myConsultingOrders.length > 0
+                ? myConsultingOrders.map(o => renderCounselorCard(o, true))
+                : <EmptyState text="진행 중인 담당 프로젝트가 없습니다." />}
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="pending" className="mt-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {pendingOrders.length > 0
+                ? pendingOrders.map(o => renderCounselorCard(o, false))
+                : <EmptyState text="대기 중인 새로운 요청이 없습니다." />}
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="completed" className="mt-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {completedOrders.length > 0
+                ? completedOrders.map(o => renderCounselorCard(o, true))
+                : <EmptyState text="완료된 프로젝트가 없습니다." />}
+            </div>
+          </TabsContent>
+        </Tabs>
+      )}
     </div>
   );
 }

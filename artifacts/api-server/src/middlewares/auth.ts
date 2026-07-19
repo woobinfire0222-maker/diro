@@ -4,7 +4,7 @@ import { supabaseAdmin } from "../lib/supabase.js";
 export interface AuthUser {
   id: string;
   email: string | null;
-  role: "admin" | "counselor" | "user";
+  role: "admin" | "counselor" | "developer" | "user";
   discord_id: string | null;
   username: string | null;
   avatar: string | null;
@@ -57,7 +57,7 @@ export async function requireAuth(
         display_name: metadata.full_name || metadata.name || null,
         avatar: metadata.avatar_url || null,
         email: user.email || null,
-        role: "user" as const,
+        role: "user" as const satisfies "admin" | "counselor" | "developer" | "user",
         last_login: new Date().toISOString(),
       };
 

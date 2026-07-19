@@ -15,6 +15,7 @@ export type UserRole = typeof UserRole[keyof typeof UserRole];
 export const UserRole = {
   admin: 'admin',
   counselor: 'counselor',
+  developer: 'developer',
   user: 'user',
 } as const;
 
@@ -70,6 +71,8 @@ export interface Order {
   user_id: string;
   /** @nullable */
   counselor_id?: string | null;
+  /** @nullable */
+  developer_id?: string | null;
   status: OrderStatus;
   server_name: string;
   /** @nullable */

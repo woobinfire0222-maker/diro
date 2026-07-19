@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
-import { Send, Image as ImageIcon, Paperclip, Loader2, Info, MessageCircle } from "lucide-react";
+import { Send, Image as ImageIcon, Paperclip, Loader2, Info, MessageCircle, DollarSign, X, CheckCircle2 } from "lucide-react";
 import { useGetOrders, useListMessages, useSendMessage, useGetMe, Message, Order } from "@workspace/api-client-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OrderStatusBadge } from "@/components/shared/OrderStatusBadge";
 import { supabase } from "@/lib/supabase";
+import { useToast } from "@/hooks/use-toast";
+
+type ExtendedOrder = Order & { developer_id?: string | null };
 
 function ChatMessage({ message, isMe }: { message: Message, isMe: boolean }) {
   if (message.type === 'system') {
@@ -58,11 +61,110 @@ function ChatMessage({ message, isMe }: { message: Message, isMe: boolean }) {
   );
 }
 
+// Panel for developer to confirm price and request bini2222 approval
+function DevPricePanel({ order, onClose }: { order: ExtendedOrder; onClose: () => void }) {
+  const [amount, setAmount] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const { toast } = useToast();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const numAmount = Number(amount.replace(/,/g, ""));
+    if (!numAmount || numAmount <= 0) {
+      toast({ variant: "destructive", title: "올바른 금액을 입력해주세요." });
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch(`/api/payments/request-approval`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({ order_id: order.id, amount: numAmount }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "요청 실패");
+      }
+      setSubmitted(true);
+      toast({ title: "✅ 승인 요청 전송됨", description: "bini2222에게 Discord DM으로 알림이 전송되었습니다." });
+    } catch (e) {
+      toast({ variant: "destructive", title: "전송 실패", description: String(e) });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (submitted) {
+    return (
+      <div className="border-t bg-emerald-50 dark:bg-emerald-950/30 p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+            <CheckCircle2 className="h-5 w-5" />
+            <span className="font-medium text-sm">승인 요청이 전송되었습니다. bini2222의 Discord DM을 기다리세요.</span>
+          </div>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-t bg-amber-50 dark:bg-amber-950/20 p-4">
+      <div className="flex items-start gap-3">
+        <div className="h-8 w-8 rounded-full bg-amber-100 dark:bg-amber-900 flex items-center justify-center shrink-0">
+          <DollarSign className="h-4 w-4 text-amber-600" />
+        </div>
+        <div className="flex-1">
+          <p className="text-sm font-semibold mb-1">💰 가격 확정 및 승인 요청</p>
+          <p className="text-xs text-muted-foreground mb-3">
+            금액을 입력하고 확인하면 bini2222에게 Discord DM으로 승인 요청이 전송됩니다.
+            승인 후 신청자 채팅에 토스 송금 버튼이 자동으로 표시됩니다.
+          </p>
+          <form onSubmit={handleSubmit} className="flex items-center gap-2">
+            <div className="relative flex-1 max-w-xs">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">₩</span>
+              <Input
+                type="text"
+                placeholder="예: 30000"
+                value={amount}
+                onChange={e => setAmount(e.target.value.replace(/[^0-9,]/g, ""))}
+                className="pl-7 h-9"
+                required
+              />
+            </div>
+            <Button
+              type="submit"
+              size="sm"
+              className="bg-amber-500 hover:bg-amber-600 text-white h-9"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "승인 요청 전송"}
+            </Button>
+            <Button variant="ghost" size="icon" className="h-9 w-9" type="button" onClick={onClose}>
+              <X className="h-4 w-4" />
+            </Button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ChatPage() {
   const [, params] = useRoute("/chat/:orderId");
   const [, setLocation] = useLocation();
   const selectedOrderId = params?.orderId;
   const [content, setContent] = useState("");
+  const [showPricePanel, setShowPricePanel] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { data: user } = useGetMe();
@@ -73,7 +175,12 @@ export default function ChatPage() {
   
   const sendMessageMutation = useSendMessage();
 
-  const selectedOrder = orders?.find(o => o.id === selectedOrderId);
+  const extOrders = (orders || []) as ExtendedOrder[];
+  const selectedOrder = extOrders.find(o => o.id === selectedOrderId);
+
+  // Developer can set price when they own the building order
+  const isDeveloper = user?.role === "developer";
+  const isMyBuildingOrder = isDeveloper && selectedOrder?.status === "building" && selectedOrder?.developer_id === user?.id;
 
   // Set up real-time subscription
   useEffect(() => {
@@ -86,8 +193,7 @@ export default function ChatPage() {
         schema: 'public', 
         table: 'order_messages',
         filter: `order_id=eq.${selectedOrderId}`
-      }, (payload) => {
-        // Optimistically we just refetch, in a real app we'd append to cache
+      }, () => {
         refetch();
       })
       .subscribe();
@@ -102,6 +208,11 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Close price panel when order changes
+  useEffect(() => {
+    setShowPricePanel(false);
+  }, [selectedOrderId]);
+
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!content.trim() || !selectedOrderId) return;
@@ -111,15 +222,11 @@ export default function ChatPage() {
       setContent("");
       await sendMessageMutation.mutateAsync({
         orderId: selectedOrderId,
-        data: {
-          content: msgText,
-          type: "text",
-        }
+        data: { content: msgText, type: "text" }
       });
       refetch();
     } catch (err) {
       console.error(err);
-      // fallback if error
     }
   };
 
@@ -141,8 +248,8 @@ export default function ChatPage() {
                 </div>
               </div>
             ))
-          ) : orders && orders.length > 0 ? (
-            orders.map(order => (
+          ) : extOrders && extOrders.length > 0 ? (
+            extOrders.map(order => (
               <div 
                 key={order.id} 
                 onClick={() => setLocation(`/chat/${order.id}`)}
@@ -183,12 +290,26 @@ export default function ChatPage() {
                 <>
                   <div>
                     <h2 className="font-bold">{selectedOrder.server_name}</h2>
-                    <p className="text-xs text-muted-foreground">상담원 대기 중</p>
+                    <p className="text-xs text-muted-foreground">
+                      {selectedOrder.status === "building" ? "서버 제작 중" : "상담원 대기 중"}
+                    </p>
                   </div>
                   <OrderStatusBadge status={selectedOrder.status} />
                 </>
               )}
             </div>
+            {/* Developer price button in header */}
+            {isMyBuildingOrder && !showPricePanel && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5 border-amber-400 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                onClick={() => setShowPricePanel(true)}
+              >
+                <DollarSign className="h-3.5 w-3.5" />
+                가격 확정
+              </Button>
+            )}
           </div>
 
           {/* Messages */}
@@ -213,6 +334,14 @@ export default function ChatPage() {
             )}
             <div ref={messagesEndRef} />
           </div>
+
+          {/* Developer Price Panel */}
+          {isMyBuildingOrder && showPricePanel && selectedOrder && (
+            <DevPricePanel
+              order={selectedOrder}
+              onClose={() => setShowPricePanel(false)}
+            />
+          )}
 
           {/* Input Area */}
           <div className="p-4 bg-card border-t">

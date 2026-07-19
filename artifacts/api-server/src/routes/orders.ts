@@ -22,6 +22,9 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
       query = query.eq("user_id", user.id);
     } else if (user.role === "counselor") {
       query = query.eq("counselor_id", user.id);
+    } else if (user.role === "developer") {
+      // Developer sees: consulting orders (to take over) + their own building orders
+      query = query.or(`developer_id.eq.${user.id},status.eq.consulting`);
     }
     // Admin sees all
 
@@ -135,12 +138,18 @@ router.get("/:id", requireAuth, async (req: Request, res: Response) => {
       return;
     }
 
-    // Access check
-    if (user.role === "user" && data.user_id !== user.id) {
+    const order = data as typeof data & { developer_id?: string | null };
+
+    // Access check per role
+    if (user.role === "user" && order.user_id !== user.id) {
       res.status(403).json({ error: "Forbidden" });
       return;
     }
-    if (user.role === "counselor" && data.counselor_id !== user.id) {
+    if (user.role === "counselor" && order.counselor_id !== user.id) {
+      res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+    if (user.role === "developer" && order.developer_id !== user.id && order.status !== "consulting") {
       res.status(403).json({ error: "Forbidden" });
       return;
     }
@@ -156,17 +165,24 @@ router.patch("/:id", requireAuth, async (req: Request, res: Response) => {
   try {
     const user = req.authUser!;
     const { id } = req.params;
-    const { status, counselor_id } = req.body;
+    const { status, counselor_id, developer_id } = req.body;
 
-    // Only counselors/admins can change status and assign counselors
-    if (user.role === "user" && (status || counselor_id)) {
+    // Users cannot change status, counselor, or developer
+    if (user.role === "user" && (status || counselor_id !== undefined || developer_id !== undefined)) {
       res.status(403).json({ error: "Forbidden" });
+      return;
+    }
+
+    // Developers can only assign themselves, not others
+    if (user.role === "developer" && developer_id !== undefined && developer_id !== user.id) {
+      res.status(403).json({ error: "Cannot assign another developer" });
       return;
     }
 
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
     if (status) updates.status = status;
     if (counselor_id !== undefined) updates.counselor_id = counselor_id;
+    if (developer_id !== undefined) updates.developer_id = developer_id;
 
     const { data, error } = await supabaseAdmin
       .from("orders")

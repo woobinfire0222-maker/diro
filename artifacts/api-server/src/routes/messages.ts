@@ -14,7 +14,7 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
     // Verify access to order
     const { data: order } = await supabaseAdmin
       .from("orders")
-      .select("user_id, counselor_id")
+      .select("user_id, counselor_id, developer_id, status")
       .eq("id", orderId)
       .single();
 
@@ -23,10 +23,15 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
       return;
     }
 
-    if (
-      user.role === "user" && order.user_id !== user.id ||
-      user.role === "counselor" && order.counselor_id !== user.id
-    ) {
+    const o = order as typeof order & { developer_id?: string | null };
+    const isOwner = o.user_id === user.id;
+    const isCounselor = o.counselor_id === user.id;
+    const isDeveloper = o.developer_id === user.id;
+    const isAdmin = user.role === "admin";
+    // Developer can view consulting orders they want to take over
+    const canPreviewAsDevTakeover = user.role === "developer" && o.status === "consulting";
+
+    if (!isOwner && !isCounselor && !isDeveloper && !isAdmin && !canPreviewAsDevTakeover) {
       res.status(403).json({ error: "Forbidden" });
       return;
     }

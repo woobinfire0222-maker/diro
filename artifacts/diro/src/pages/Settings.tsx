@@ -1,19 +1,22 @@
 import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { useGetMe, useUpdateUser } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme } from "@/providers/theme-provider";
 import { Switch } from "@/components/ui/switch";
+import { ShieldCheck } from "lucide-react";
 
 export default function SettingsPage() {
   const { data: user, refetch } = useGetMe();
   const updateUserMutation = useUpdateUser();
   const { toast } = useToast();
   const { theme, setTheme } = useTheme();
+  const [, setLocation] = useLocation();
 
   const [displayName, setDisplayName] = useState("");
 
@@ -38,11 +41,27 @@ export default function SettingsPage() {
     }
   };
 
+  // Admin mode visible to bini2222 (superadmin) or any admin role
+  const isAdminEligible = user?.username === "bini2222" || user?.role === "admin";
+
   return (
     <div className="max-w-3xl mx-auto space-y-8 animate-in fade-in">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight mb-1">설정</h1>
-        <p className="text-muted-foreground">계정 및 앱 환경설정을 관리하세요.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight mb-1">설정</h1>
+          <p className="text-muted-foreground">계정 및 앱 환경설정을 관리하세요.</p>
+        </div>
+        {isAdminEligible && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 text-xs border-destructive/40 text-destructive hover:bg-destructive/10"
+            onClick={() => setLocation("/admin")}
+          >
+            <ShieldCheck className="h-3.5 w-3.5" />
+            관리자 모드
+          </Button>
+        )}
       </div>
 
       <Card>

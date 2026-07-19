@@ -1,12 +1,13 @@
 import { Router } from "express";
 import { requireAuth, requireRole } from "../middlewares/auth.js";
 import { supabaseAdmin } from "../lib/supabase.js";
+import { sendApprovalDM } from "../lib/discord.js";
 import type { Request, Response } from "express";
 
 const TOSS_ACCOUNT = "190839534245";
 const router = Router();
 
-// Create payment request (counselor only)
+// Create payment request (counselor only — direct send without approval)
 router.post("/", requireAuth, requireRole("counselor", "admin"), async (req: Request, res: Response) => {
   try {
     const user = req.authUser!;
@@ -63,6 +64,61 @@ router.post("/", requireAuth, requireRole("counselor", "admin"), async (req: Req
     res.status(201).json(data);
   } catch (err) {
     res.status(500).json({ error: "Failed to create payment request" });
+  }
+});
+
+// Developer: request approval from bini2222 via Discord DM
+router.post("/request-approval", requireAuth, requireRole("developer", "admin"), async (req: Request, res: Response) => {
+  try {
+    const user = req.authUser!;
+    const { order_id, amount } = req.body;
+
+    if (!order_id || !amount) {
+      res.status(400).json({ error: "order_id and amount are required" });
+      return;
+    }
+
+    const deeplink = `supertoss://send?bank=토스&accountNo=${TOSS_ACCOUNT}&amount=${Number(amount)}`;
+
+    // Create payment request with awaiting_approval status
+    const { data: payment, error } = await supabaseAdmin
+      .from("payment_requests")
+      .insert({
+        order_id,
+        counselor_id: user.id,
+        amount: Number(amount),
+        status: "awaiting_approval",
+        deeplink,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Get order details for the DM message
+    const { data: order } = await supabaseAdmin
+      .from("orders")
+      .select("server_name, user_id")
+      .eq("id", order_id)
+      .single();
+
+    // Send Discord DM to bini2222 for approval
+    try {
+      await sendApprovalDM(
+        payment.id,
+        order_id,
+        Number(amount),
+        order?.server_name || "알 수 없음",
+        user.display_name || user.username || "개발자"
+      );
+    } catch (discordErr) {
+      // Don't fail the whole request if DM fails — log and continue
+      console.error("Discord DM failed:", discordErr);
+    }
+
+    res.status(201).json({ ...payment, discord_dm_sent: true });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to request payment approval" });
   }
 });
 

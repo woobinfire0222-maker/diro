@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { initDiscordBot } from "./lib/discord.js";
 
 const rawPort = process.env["PORT"];
 
@@ -22,4 +23,11 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+
+  // Initialize Discord bot for interaction handling (approve/reject buttons)
+  try {
+    initDiscordBot();
+  } catch (e) {
+    logger.warn({ e }, "Discord bot initialization skipped");
+  }
 });
