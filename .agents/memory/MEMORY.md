@@ -1,0 +1,2 @@
+- [Orval zod v3 looseObject](orval-zod-v3-looseobject.md) — Orval v8 generates zod.looseObject() for bare type:object schemas; incompatible with zod v3; fix: add additionalProperties: false to every schema.
+- [Orval Params type collision](orval-params-collision.md) — Operations with both path AND query params produce duplicate {OperationIdPascal}Params in api.ts and types/; fix: remove query params from that operation or restructure.

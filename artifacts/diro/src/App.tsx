@@ -11,6 +11,11 @@ import LoginPage from "@/pages/Login";
 import HomePage from "@/pages/Home";
 import OrdersPage from "@/pages/Orders";
 import ChatPage from "@/pages/Chat";
+import ServersPage from "@/pages/Servers";
+import CounselorDashboard from "@/pages/CounselorDashboard";
+import ServerEditorPage from "@/pages/ServerEditor";
+import AdminDashboard from "@/pages/AdminDashboard";
+import SettingsPage from "@/pages/Settings";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient({
@@ -56,12 +61,32 @@ function Routes() {
         <AppLayout><ProtectedRoute component={OrdersPage} /></AppLayout>
       </Route>
 
+      <Route path="/servers">
+        <AppLayout><ProtectedRoute component={ServersPage} /></AppLayout>
+      </Route>
+
+      <Route path="/counselor">
+        <AppLayout><ProtectedRoute component={CounselorDashboard} /></AppLayout>
+      </Route>
+
+      <Route path="/counselor/editor/:orderId">
+        <ProtectedRoute component={ServerEditorPage} />
+      </Route>
+
+      <Route path="/admin">
+        <AppLayout><ProtectedRoute component={AdminDashboard} /></AppLayout>
+      </Route>
+
       <Route path="/chat">
         <AppLayout><ProtectedRoute component={ChatPage} /></AppLayout>
       </Route>
       
       <Route path="/chat/:orderId">
         <AppLayout><ProtectedRoute component={ChatPage} /></AppLayout>
+      </Route>
+
+      <Route path="/settings">
+        <AppLayout><ProtectedRoute component={SettingsPage} /></AppLayout>
       </Route>
 
       <Route>
