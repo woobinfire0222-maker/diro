@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
 import { Hash, Volume2, Plus, Settings as SettingsIcon, ChevronDown, FolderOpen, ArrowLeft, Save, Shield, Video, Megaphone, CheckCircle } from "lucide-react";
-import { useGetServerProject, useUpdateServerProject, useGetOrder } from "@workspace/api-client-react";
+import { useGetServerProject, useUpdateServerProject, useGetOrder, useSendPreview } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -79,6 +79,7 @@ export default function ServerEditorPage() {
   const { data: order, isLoading: isOrderLoading } = useGetOrder(orderId!, { query: { enabled: !!orderId } });
   const { data: project, isLoading: isProjectLoading, refetch } = useGetServerProject(orderId!, { query: { enabled: !!orderId } });
   const updateProjectMutation = useUpdateServerProject();
+  const sendPreviewMutation = useSendPreview();
 
   const [config, setConfig] = useState<ServerConfig>(defaultConfig);
   const [selectedItem, setSelectedItem] = useState<{ type: 'server' | 'category' | 'channel' | 'role', id?: string, categoryId?: string }>({ type: 'server' });
@@ -95,6 +96,42 @@ export default function ServerEditorPage() {
       setConfig(prev => ({ ...prev, serverName: order.server_name }));
     }
   }, [project, order]);
+
+  const handleSendPreview = async () => {
+    if (!orderId) return;
+    try {
+      await sendPreviewMutation.mutateAsync({ orderId });
+      toast({ title: "미리보기 전송 완료", description: "고객 채팅에 미리보기가 전송되었습니다." });
+    } catch (e) {
+      toast({ variant: "destructive", title: "전송 실패" });
+    }
+  };
+
+  const handleAddRole = () => {
+    const newRole: Role = {
+      id: `role-${Date.now()}`,
+      name: "새 역할",
+      color: "#5865F2",
+      permissions: [],
+    };
+    setConfig(prev => ({ ...prev, roles: [...prev.roles, newRole] }));
+  };
+
+  const handleAddChannel = (categoryId: string) => {
+    const newChannel: Channel = {
+      id: `ch-${Date.now()}`,
+      name: "새-채널",
+      type: "text",
+    };
+    setConfig(prev => ({
+      ...prev,
+      categories: prev.categories.map(cat =>
+        cat.id === categoryId
+          ? { ...cat, channels: [...cat.channels, newChannel] }
+          : cat
+      ),
+    }));
+  };
 
   const handleSave = async () => {
     if (!orderId) return;
@@ -145,7 +182,7 @@ export default function ServerEditorPage() {
           </h1>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="bg-transparent border-[#3F4147] text-[#DBDEE1] hover:bg-[#3F4147] hover:text-white">
+          <Button variant="outline" size="sm" className="bg-transparent border-[#3F4147] text-[#DBDEE1] hover:bg-[#3F4147] hover:text-white" onClick={handleSendPreview} disabled={sendPreviewMutation.isPending}>
             미리보기 전송
           </Button>
           <Button size="sm" className="bg-[#248046] hover:bg-[#1a6334] text-white" onClick={handleSave} disabled={updateProjectMutation.isPending}>
@@ -184,7 +221,7 @@ export default function ServerEditorPage() {
                     <ChevronDown className="h-3 w-3 mr-1" />
                     {category.name}
                   </div>
-                  <Plus className="h-3 w-3 opacity-0 group-hover:opacity-100" />
+                  <Plus className="h-3 w-3 opacity-0 group-hover:opacity-100" onClick={(e) => { e.stopPropagation(); handleAddChannel(category.id); }} />
                 </div>
                 <div className="space-y-[2px]">
                   {category.channels.map((channel) => (
@@ -253,7 +290,7 @@ export default function ServerEditorPage() {
                     <div className="bg-[#2B2D31] rounded-lg border border-[#1E1F22] overflow-hidden">
                       <div className="p-4 border-b border-[#1E1F22] flex justify-between items-center">
                         <p className="text-sm text-[#949BA4]">멤버들에게 권한을 부여하고 이름을 색상으로 꾸며보세요.</p>
-                        <Button size="sm" className="bg-[#5865F2] hover:bg-[#4752C4] text-white">새 역할 만들기</Button>
+                        <Button size="sm" className="bg-[#5865F2] hover:bg-[#4752C4] text-white" onClick={handleAddRole}>새 역할 만들기</Button>
                       </div>
                       <div className="p-2 space-y-1">
                         {config.roles.map(role => (
@@ -299,6 +336,16 @@ export default function ServerEditorPage() {
                           value={selectedChannel.topic || ""}
                           placeholder="이 채널에 대한 설명을 입력하세요"
                           className="bg-[#1E1F22] border-none text-[#DBDEE1] resize-none focus-visible:ring-[#00C7FF]"
+                          onChange={(e) => {
+                            setConfig(prev => ({
+                              ...prev,
+                              categories: prev.categories.map(cat =>
+                                cat.id === selectedItem.categoryId
+                                  ? { ...cat, channels: cat.channels.map(ch => ch.id === selectedItem.id ? { ...ch, topic: e.target.value } : ch) }
+                                  : cat
+                              ),
+                            }));
+                          }}
                         />
                       </div>
                       
@@ -307,7 +354,19 @@ export default function ServerEditorPage() {
                           <Label className="text-[#DBDEE1] font-medium">연령 제한 채널 (NSFW)</Label>
                           <p className="text-sm text-[#949BA4]">사용자가 이 채널의 콘텐츠를 보기 전에 18세 이상인지 확인해야 합니다.</p>
                         </div>
-                        <Switch />
+                        <Switch
+                          checked={selectedChannel.nsfw || false}
+                          onCheckedChange={(checked) => {
+                            setConfig(prev => ({
+                              ...prev,
+                              categories: prev.categories.map(cat =>
+                                cat.id === selectedItem.categoryId
+                                  ? { ...cat, channels: cat.channels.map(ch => ch.id === selectedItem.id ? { ...ch, nsfw: checked } : ch) }
+                                  : cat
+                              ),
+                            }));
+                          }}
+                        />
                       </div>
                     </div>
                   </div>

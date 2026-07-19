@@ -65,7 +65,7 @@ router.put("/:orderId", requireAuth, requireRole("counselor", "admin"), async (r
         config_json,
         history_json: JSON.stringify(history),
         updated_at: new Date().toISOString(),
-      })
+      }, { onConflict: 'order_id' })
       .select()
       .single();
 
