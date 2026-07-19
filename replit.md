@@ -68,3 +68,4 @@ _Populate as you build — explicit user instructions worth remembering across s
 - Operations with both path AND query params collide on `{OperationId}Params` type name — remove query params or restructure
 - Never use `zod/v4` imports — this project uses zod v3 (`zod` package, `z.object` etc.)
 - Supabase Realtime requires tables to be added to `supabase_realtime` publication (done in schema.sql)
+- Vite requires `VITE_` prefixed env vars to be exposed to the browser. `vite.config.ts` maps `SUPABASE_URL` → `import.meta.env.VITE_SUPABASE_URL` and `SUPABASE_ANON_KEY` → `import.meta.env.VITE_SUPABASE_ANON_KEY` via `define`, so only one set of secrets is needed.
