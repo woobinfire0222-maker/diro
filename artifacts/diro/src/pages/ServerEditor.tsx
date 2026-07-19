@@ -86,7 +86,7 @@ export default function ServerEditorPage() {
   useEffect(() => {
     if (project && project.config_json) {
       try {
-        setConfig(JSON.parse(project.config_json));
+        setConfig({ ...defaultConfig, ...JSON.parse(project.config_json) });
       } catch (e) {
         console.error("Failed to parse config", e);
       }
