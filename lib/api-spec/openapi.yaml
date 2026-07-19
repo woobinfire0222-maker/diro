@@ -1,22 +1,39 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: DIRO Platform API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication
+  - name: users
+    description: User management
+  - name: orders
+    description: Order management
+  - name: messages
+    description: Chat messages
+  - name: projects
+    description: Discord server projects
+  - name: payments
+    description: Payment requests
+  - name: notifications
+    description: Notifications
+  - name: discord
+    description: Discord bot operations
+  - name: admin
+    description: Admin operations
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +41,1016 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current authenticated user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Unauthorized
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Log out
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get user by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: Not found
+
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update user profile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /orders:
+    get:
+      operationId: getOrders
+      tags: [orders]
+      summary: List orders filtered by role
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+
+    post:
+      operationId: createOrder
+      tags: [orders]
+      summary: Create a new order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderInput"
+      responses:
+        "201":
+          description: Order created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+  /orders/{id}:
+    get:
+      operationId: getOrder
+      tags: [orders]
+      summary: Get order by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Order found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "404":
+          description: Not found
+
+    patch:
+      operationId: updateOrder
+      tags: [orders]
+      summary: Update order status or counselor
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+
+    delete:
+      operationId: deleteOrder
+      tags: [orders]
+      summary: Delete order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /orders/{id}/stats:
+    get:
+      operationId: getOrderStats
+      tags: [orders]
+      summary: Get stats for an order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Order stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrderStats"
+
+  /orders/{orderId}/messages:
+    get:
+      operationId: listMessages
+      tags: [messages]
+      summary: Get messages for an order
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Messages list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Message"
+
+    post:
+      operationId: sendMessage
+      tags: [messages]
+      summary: Send a message
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MessageInput"
+      responses:
+        "201":
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+
+  /orders/{orderId}/messages/{messageId}:
+    patch:
+      operationId: updateMessage
+      tags: [messages]
+      summary: Edit a message
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MessageUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+
+    delete:
+      operationId: deleteMessage
+      tags: [messages]
+      summary: Delete a message
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: messageId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
+  /projects/{orderId}:
+    get:
+      operationId: getServerProject
+      tags: [projects]
+      summary: Get server project for an order
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Server project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerProject"
+
+    put:
+      operationId: updateServerProject
+      tags: [projects]
+      summary: Update server project configuration
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServerProjectUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServerProject"
+
+  /projects/{orderId}/preview:
+    post:
+      operationId: sendPreview
+      tags: [projects]
+      summary: Send server preview to client
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Preview sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PreviewResult"
+
+  /payments:
+    post:
+      operationId: createPaymentRequest
+      tags: [payments]
+      summary: Create a payment request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentRequestInput"
+      responses:
+        "201":
+          description: Payment request created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentRequest"
+
+  /payments/{id}:
+    patch:
+      operationId: updatePaymentRequest
+      tags: [payments]
+      summary: Update payment status
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentRequestUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentRequest"
+
+  /notifications:
+    get:
+      operationId: getNotifications
+      tags: [notifications]
+      summary: Get notifications for current user
+      parameters:
+        - name: unread_only
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Notifications list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+
+  /notifications/{id}/read:
+    patch:
+      operationId: markNotificationRead
+      tags: [notifications]
+      summary: Mark notification as read
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Marked as read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Notification"
+
+  /notifications/read-all:
+    post:
+      operationId: markAllNotificationsRead
+      tags: [notifications]
+      summary: Mark all notifications as read
+      responses:
+        "200":
+          description: All marked as read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /discord/verify:
+    post:
+      operationId: verifyDiscordServer
+      tags: [discord]
+      summary: Verify Discord bot is in a server
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiscordVerifyInput"
+      responses:
+        "200":
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiscordVerifyResult"
+
+  /discord/apply:
+    post:
+      operationId: applyDiscordConfig
+      tags: [discord]
+      summary: Apply server config to real Discord server
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiscordApplyInput"
+      responses:
+        "200":
+          description: Config applied
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiscordApplyResult"
+
+  /admin/stats:
+    get:
+      operationId: getAdminStats
+      tags: [admin]
+      summary: Get platform statistics
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStats"
+
+  /admin/users:
+    get:
+      operationId: getAdminUsers
+      tags: [admin]
+      summary: List all users
+      parameters:
+        - name: role
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Users list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+
+  /admin/users/{id}:
+    patch:
+      operationId: adminUpdateUser
+      tags: [admin]
+      summary: Update user role
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUserUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /admin/orders:
+    get:
+      operationId: getAdminOrders
+      tags: [admin]
+      summary: List all orders
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Orders list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Order"
+
+  /admin/announce:
+    post:
+      operationId: createAnnouncement
+      tags: [admin]
+      summary: Create platform announcement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnnouncementInput"
+      responses:
+        "201":
+          description: Announcement created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Announcement"
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
+      additionalProperties: false
 
+    User:
+      type: object
+      required: [id, discord_id, username, role, created_at]
+      properties:
+        id:
+          type: string
+        discord_id:
+          type: string
+        username:
+          type: string
+        display_name:
+          type: ["string", "null"]
+        avatar:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        role:
+          type: string
+          enum: [admin, counselor, user]
+        created_at:
+          type: string
+        last_login:
+          type: ["string", "null"]
+      additionalProperties: false
+
+    UserUpdate:
+      type: object
+      properties:
+        display_name:
+          type: string
+        avatar:
+          type: string
+      additionalProperties: false
+
+    Order:
+      type: object
+      required: [id, order_number, user_id, status, server_name, atmosphere, budget, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        order_number:
+          type: string
+        user_id:
+          type: string
+        counselor_id:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [pending, consulting, building, payment_pending, completed, cancelled]
+        server_name:
+          type: string
+        server_description:
+          type: ["string", "null"]
+        atmosphere:
+          type: string
+          enum: [gaming, community, corporate, social, streaming, education, other]
+        category_count:
+          type: ["integer", "null"]
+        text_channel_count:
+          type: ["integer", "null"]
+        voice_channel_count:
+          type: ["integer", "null"]
+        desired_roles:
+          type: ["string", "null"]
+        desired_permissions:
+          type: ["string", "null"]
+        desired_features:
+          type: ["string", "null"]
+        budget:
+          type: integer
+        additional_notes:
+          type: ["string", "null"]
+        created_at:
+          type: string
+        updated_at:
+          type: string
+        user_username:
+          type: ["string", "null"]
+        user_avatar:
+          type: ["string", "null"]
+        user_display_name:
+          type: ["string", "null"]
+        counselor_username:
+          type: ["string", "null"]
+        counselor_avatar:
+          type: ["string", "null"]
+      additionalProperties: false
+
+    OrderInput:
+      type: object
+      required: [server_name, atmosphere, budget]
+      properties:
+        server_name:
+          type: string
+        server_description:
+          type: string
+        atmosphere:
+          type: string
+          enum: [gaming, community, corporate, social, streaming, education, other]
+        category_count:
+          type: integer
+        text_channel_count:
+          type: integer
+        voice_channel_count:
+          type: integer
+        desired_roles:
+          type: string
+        desired_permissions:
+          type: string
+        desired_features:
+          type: string
+        budget:
+          type: integer
+        additional_notes:
+          type: string
+      additionalProperties: false
+
+    OrderUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, consulting, building, payment_pending, completed, cancelled]
+        counselor_id:
+          type: string
+      additionalProperties: false
+
+    OrderStats:
+      type: object
+      required: [message_count, days_elapsed, progress_percent]
+      properties:
+        message_count:
+          type: integer
+        days_elapsed:
+          type: integer
+        progress_percent:
+          type: integer
+        last_activity:
+          type: ["string", "null"]
+      additionalProperties: false
+
+    Message:
+      type: object
+      required: [id, order_id, sender_id, content, type, created_at]
+      properties:
+        id:
+          type: string
+        order_id:
+          type: string
+        sender_id:
+          type: string
+        content:
+          type: string
+        type:
+          type: string
+          enum: [text, image, file, system, payment, preview]
+        metadata_json:
+          type: ["string", "null"]
+        is_edited:
+          type: boolean
+        created_at:
+          type: string
+        updated_at:
+          type: ["string", "null"]
+        sender_username:
+          type: ["string", "null"]
+        sender_avatar:
+          type: ["string", "null"]
+        sender_display_name:
+          type: ["string", "null"]
+        sender_role:
+          type: ["string", "null"]
+      additionalProperties: false
+
+    MessageInput:
+      type: object
+      required: [content, type]
+      properties:
+        content:
+          type: string
+        type:
+          type: string
+          enum: [text, image, file, system, payment, preview]
+        metadata_json:
+          type: string
+      additionalProperties: false
+
+    MessageUpdate:
+      type: object
+      required: [content]
+      properties:
+        content:
+          type: string
+      additionalProperties: false
+
+    ServerProject:
+      type: object
+      required: [id, order_id, config_json, created_at]
+      properties:
+        id:
+          type: string
+        order_id:
+          type: string
+        config_json:
+          type: string
+        history_json:
+          type: ["string", "null"]
+        created_at:
+          type: string
+        updated_at:
+          type: ["string", "null"]
+      additionalProperties: false
+
+    ServerProjectUpdate:
+      type: object
+      required: [config_json]
+      properties:
+        config_json:
+          type: string
+      additionalProperties: false
+
+    PreviewResult:
+      type: object
+      required: [success, message_id]
+      properties:
+        success:
+          type: boolean
+        message_id:
+          type: string
+      additionalProperties: false
+
+    PaymentRequest:
+      type: object
+      required: [id, order_id, counselor_id, amount, status, deeplink, created_at]
+      properties:
+        id:
+          type: string
+        order_id:
+          type: string
+        counselor_id:
+          type: string
+        amount:
+          type: integer
+        status:
+          type: string
+          enum: [pending, paid, cancelled]
+        deeplink:
+          type: string
+        created_at:
+          type: string
+        updated_at:
+          type: ["string", "null"]
+      additionalProperties: false
+
+    PaymentRequestInput:
+      type: object
+      required: [order_id, amount]
+      properties:
+        order_id:
+          type: string
+        amount:
+          type: integer
+      additionalProperties: false
+
+    PaymentRequestUpdate:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [pending, paid, cancelled]
+      additionalProperties: false
+
+    Notification:
+      type: object
+      required: [id, user_id, type, title, is_read, created_at]
+      properties:
+        id:
+          type: string
+        user_id:
+          type: string
+        type:
+          type: string
+          enum: [new_message, new_order, status_change, preview_sent, payment_request]
+        title:
+          type: string
+        body:
+          type: ["string", "null"]
+        reference_id:
+          type: ["string", "null"]
+        is_read:
+          type: boolean
+        created_at:
+          type: string
+      additionalProperties: false
+
+    DiscordVerifyInput:
+      type: object
+      required: [server_id]
+      properties:
+        server_id:
+          type: string
+      additionalProperties: false
+
+    DiscordVerifyResult:
+      type: object
+      required: [success, in_server]
+      properties:
+        success:
+          type: boolean
+        in_server:
+          type: boolean
+        server_name:
+          type: ["string", "null"]
+        error:
+          type: ["string", "null"]
+      additionalProperties: false
+
+    DiscordApplyInput:
+      type: object
+      required: [order_id, server_id]
+      properties:
+        order_id:
+          type: string
+        server_id:
+          type: string
+      additionalProperties: false
+
+    DiscordApplyResult:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+        applied_items:
+          type: array
+          items:
+            type: string
+        error:
+          type: ["string", "null"]
+      additionalProperties: false
+
+    AdminStats:
+      type: object
+      required: [total_orders, total_users, total_counselors, revenue_total, orders_this_week, active_chats]
+      properties:
+        total_orders:
+          type: integer
+        total_users:
+          type: integer
+        total_counselors:
+          type: integer
+        pending_orders:
+          type: integer
+        consulting_orders:
+          type: integer
+        building_orders:
+          type: integer
+        completed_orders:
+          type: integer
+        cancelled_orders:
+          type: integer
+        revenue_total:
+          type: integer
+        orders_this_week:
+          type: integer
+        active_chats:
+          type: integer
+      additionalProperties: false
+
+    AdminUserUpdate:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          enum: [admin, counselor, user]
+      additionalProperties: false
+
+    Announcement:
+      type: object
+      required: [id, title, content, created_at]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        content:
+          type: string
+        created_at:
+          type: string
+      additionalProperties: false
+
+    AnnouncementInput:
+      type: object
+      required: [title, content]
+      properties:
+        title:
+          type: string
+        content:
+          type: string
+      additionalProperties: false

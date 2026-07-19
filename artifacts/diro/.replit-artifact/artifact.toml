@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "DIRO"
+version = "1.0.0"
+id = "artifacts/diro"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24277
+
+[services.development]
+run = "pnpm --filter @workspace/diro run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/diro", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/diro/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24277"
+BASE_PATH = "/"
