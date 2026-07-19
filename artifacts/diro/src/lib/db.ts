@@ -487,15 +487,11 @@ export function useMarkAllNotificationsRead() {
 export function useVerifyBot() {
   return useMutation({
     mutationFn: async (serverId: string) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Not authenticated");
-      const res = await fetch("/api/discord/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ server_id: serverId }),
+      const { data, error } = await supabase.functions.invoke("discord-verify", {
+        body: { server_id: serverId },
       });
-      if (!res.ok) throw new Error("Verify failed");
-      return res.json() as Promise<{ in_server: boolean; server_name: string | null; error: string | null }>;
+      if (error) throw new Error(error.message || "Verify failed");
+      return data as { in_server: boolean; server_name: string | null; error: string | null };
     },
   });
 }
@@ -503,15 +499,11 @@ export function useVerifyBot() {
 export function useApplyDiscord() {
   return useMutation({
     mutationFn: async ({ orderId, serverId }: { orderId: string; serverId: string }) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Not authenticated");
-      const res = await fetch("/api/discord/apply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-        body: JSON.stringify({ order_id: orderId, server_id: serverId }),
+      const { data, error } = await supabase.functions.invoke("discord-apply", {
+        body: { order_id: orderId, server_id: serverId },
       });
-      if (!res.ok) throw new Error("Apply failed");
-      return res.json() as Promise<{ success: boolean; applied_items: string[]; error: string | null }>;
+      if (error) throw new Error(error.message || "Apply failed");
+      return data as { success: boolean; applied_items: string[]; error: string | null };
     },
   });
 }
@@ -588,27 +580,19 @@ export function useGetAdminStats() {
 }
 
 // ─── 차단/차단 해제 ──────────────────────────────────────────────────────────
-
-async function callAdminApi(path: string, body?: object) {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) throw new Error("Not authenticated");
-  const res = await fetch(`${import.meta.env.BASE_URL}api/admin/${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${session.access_token}`,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (!res.ok) throw new Error((await res.json()).error || "요청 실패");
-  return res.json();
-}
+// ban_user / unban_user 는 Supabase SECURITY DEFINER RPC 함수 (superadmin 체크 내장)
 
 export function useBanUser() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ userId, reason }: { userId: string; reason: string }) =>
-      callAdminApi(`users/${userId}/ban`, { reason }),
+    mutationFn: async ({ userId, reason }: { userId: string; reason: string }) => {
+      const { data, error } = await supabase.rpc("ban_user", {
+        target_user_id: userId,
+        ban_reason_text: reason || null,
+      });
+      if (error) throw new Error(error.message || "차단 실패");
+      return data as { success: boolean };
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["adminUsers"] }),
   });
 }
@@ -616,7 +600,13 @@ export function useBanUser() {
 export function useUnbanUser() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (userId: string) => callAdminApi(`users/${userId}/unban`),
+    mutationFn: async (userId: string) => {
+      const { data, error } = await supabase.rpc("unban_user", {
+        target_user_id: userId,
+      });
+      if (error) throw new Error(error.message || "차단 해제 실패");
+      return data as { success: boolean };
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["adminUsers"] }),
   });
 }
