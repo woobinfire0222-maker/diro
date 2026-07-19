@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
 import { Hash, Volume2, Plus, Settings as SettingsIcon, ChevronDown, FolderOpen, ArrowLeft, Save, Shield, Video, Megaphone, CheckCircle } from "lucide-react";
-import { useGetServerProject, useUpdateServerProject, useGetOrder, useSendPreview } from "@workspace/api-client-react";
+import { useGetServerProject, useUpdateServerProject, useGetOrder, useSendPreview } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

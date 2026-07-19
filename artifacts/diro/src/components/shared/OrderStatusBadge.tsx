@@ -1,5 +1,4 @@
 import { Badge } from "@/components/ui/badge";
-import { OrderStatus } from "@workspace/api-client-react";
 
 export function OrderStatusBadge({ status }: { status: string }) {
   const statusMap: Record<string, { label: string, variant: 'default' | 'secondary' | 'destructive' | 'outline', colorClass?: string }> = {

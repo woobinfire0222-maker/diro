@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { Search, MessageSquare, Play, CheckCircle, Code2, Loader2, Headset, Wrench } from "lucide-react";
-import { useGetOrders, useGetMe, Order, useUpdateOrder } from "@workspace/api-client-react";
+import { useGetOrders, useGetMe, Order, useUpdateOrder } from "@/lib/db";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,17 +50,10 @@ export default function CounselorDashboard() {
   const handleTakeoverOrder = async (orderId: string) => {
     setTakingOverId(orderId);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      const res = await fetch(`/api/orders/${orderId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify({ developer_id: user!.id, status: "building" }),
+      await updateOrderMutation.mutateAsync({
+        id: orderId,
+        data: { developer_id: user!.id, status: "building" },
       });
-      if (!res.ok) throw new Error(await res.text());
       toast({ title: "개발 담당으로 이어받았습니다." });
       refetch();
     } catch (e) {

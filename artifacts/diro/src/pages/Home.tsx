@@ -1,6 +1,6 @@
 import { useLocation } from "wouter";
 import { Plus, ArrowRight, MessageCircle, Clock, Zap, ShoppingBag } from "lucide-react";
-import { useGetOrders, useGetMe } from "@workspace/api-client-react";
+import { useGetOrders, useGetMe } from "@/lib/db";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";

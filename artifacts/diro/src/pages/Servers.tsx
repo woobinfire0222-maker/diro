@@ -1,6 +1,6 @@
 import { useLocation } from "wouter";
 import { Server, Settings, ExternalLink, Play } from "lucide-react";
-import { useGetOrders } from "@workspace/api-client-react";
+import { useGetOrders } from "@/lib/db";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";

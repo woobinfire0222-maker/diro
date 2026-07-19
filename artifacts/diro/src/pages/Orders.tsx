@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Plus, Clock, Trash, MessageCircle } from "lucide-react";
-import { useGetOrders, useCreateOrder, useDeleteOrder } from "@workspace/api-client-react";
+import { useGetOrders, useCreateOrder, useDeleteOrder } from "@/lib/db";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";

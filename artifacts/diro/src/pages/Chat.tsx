@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { Send, Image as ImageIcon, Paperclip, Loader2, Info, MessageCircle, DollarSign, X, CheckCircle2 } from "lucide-react";
-import { useGetOrders, useListMessages, useSendMessage, useGetMe, Message, Order } from "@workspace/api-client-react";
+import { useGetOrders, useListMessages, useSendMessage, useGetMe, Message, Order } from "@/lib/db";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,20 +78,15 @@ function DevPricePanel({ order, onClose }: { order: ExtendedOrder; onClose: () =
 
     setIsSubmitting(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      const res = await fetch(`/api/payments/request-approval`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify({ order_id: order.id, amount: numAmount }),
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) throw new Error("Not authenticated");
+      const { error } = await supabase.from("payment_requests").insert({
+        order_id: order.id,
+        user_id: authUser.id,
+        amount: numAmount,
+        status: "pending",
       });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || "요청 실패");
-      }
+      if (error) throw error;
       setSubmitted(true);
       toast({ title: "✅ 승인 요청 전송됨", description: "bini2222에게 Discord DM으로 알림이 전송되었습니다." });
     } catch (e) {
@@ -240,7 +235,8 @@ export default function ChatPage() {
       setContent("");
       await sendMessageMutation.mutateAsync({
         orderId: selectedOrderId,
-        data: { content: msgText, type: "text" }
+        content: msgText,
+        type: "text",
       });
       refetch();
     } catch (err) {

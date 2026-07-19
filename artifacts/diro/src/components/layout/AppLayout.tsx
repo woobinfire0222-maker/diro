@@ -1,10 +1,10 @@
 import { Link, useLocation } from "wouter";
 import { Home, ShoppingBag, MessageCircle, Server, Settings, Headset, Shield, LogOut, Bell } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { useGetMe, useGetNotifications, useLogout } from "@workspace/api-client-react";
+import { useGetMe, useGetNotifications, useLogout } from "@/lib/db";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Badge } from "./ui/badge";
+import { Badge } from "@/components/ui/badge";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();

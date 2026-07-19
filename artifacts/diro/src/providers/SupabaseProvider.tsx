@@ -2,13 +2,6 @@ import { useState, useEffect } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { AuthContext } from '@/context/AuthContext';
-import { setAuthTokenGetter } from '@workspace/api-client-react';
-
-// Wire up Supabase session token so all API calls include Authorization: Bearer
-setAuthTokenGetter(async () => {
-  const { data: { session } } = await supabase.auth.getSession();
-  return session?.access_token ?? null;
-});
 
 export function SupabaseProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -32,18 +25,18 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signUp = async (email: string, password: string, username: string): Promise<{ error: string | null }> => {
-    // Use backend admin API to create user with email pre-confirmed
-    const res = await fetch('/api/auth/signup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, username }),
+    // Supabase Auth로 직접 회원가입 (Supabase 대시보드에서 "Confirm email" 비활성화 필요)
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { username, full_name: username } },
     });
-    const json = await res.json();
-    if (!res.ok) return { error: json.error || '회원가입 실패' };
-
-    // Sign in immediately after creation
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-    if (signInError) return { error: signInError.message };
+    if (error) {
+      const msg = error.message.toLowerCase().includes("already")
+        ? "이미 사용 중인 이메일입니다."
+        : error.message;
+      return { error: msg };
+    }
     return { error: null };
   };
 

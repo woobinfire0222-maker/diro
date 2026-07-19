@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useGetAdminStats, useGetAdminUsers, useGetMe } from "@workspace/api-client-react";
+import { useGetAdminStats, useGetAdminUsers, useGetMe } from "@/lib/db";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -53,20 +53,11 @@ export default function AdminDashboard() {
     }
     setUpdatingId(userId);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      const res = await fetch(`/api/admin/users/${userId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
-        },
-        body: JSON.stringify({ role: newRole }),
-      });
-      if (!res.ok) throw new Error(await res.text());
+      const { error } = await supabase.from("users").update({ role: newRole }).eq("id", userId);
+      if (error) throw error;
       toast({ title: `역할이 '${ROLE_LABELS[newRole]}'(으)로 변경되었습니다.` });
       refetch();
-      queryClient.invalidateQueries({ queryKey: ["getAdminUsers"] });
+      queryClient.invalidateQueries({ queryKey: ["adminUsers"] });
     } catch (e) {
       toast({ variant: "destructive", title: "역할 변경 실패", description: String(e) });
     } finally {
