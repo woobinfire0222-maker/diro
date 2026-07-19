@@ -1,11 +1,18 @@
 import { useState } from "react";
-import { useGetAdminStats, useGetAdminUsers, useGetMe, useBanUser, useUnbanUser } from "@/lib/db";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  useGetAdminStats, useGetAdminUsers, useGetMe, useBanUser, useUnbanUser,
+  useGetPaymentRequests, useApprovePayment, useMarkPaymentPaid, useAdminAnnounce,
+} from "@/lib/db";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import {
   Users, ShoppingCart, DollarSign, Activity,
   ChevronDown, Check, Loader2, Ban, ShieldCheck, AlertTriangle,
+  Megaphone, CreditCard, CheckCircle2, ExternalLink,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -13,8 +20,6 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { useQueryClient } from "@tanstack/react-query";
@@ -35,24 +40,59 @@ const ROLE_COLORS: Record<Role, string> = {
   user: "bg-secondary text-secondary-foreground border-transparent",
 };
 
+const STATUS_COLORS: Record<string, string> = {
+  pending: "bg-yellow-500/10 text-yellow-600 border-yellow-500/30",
+  awaiting_approval: "bg-blue-500/10 text-blue-600 border-blue-500/30",
+  approved: "bg-purple-500/10 text-purple-600 border-purple-500/30",
+  paid: "bg-emerald-500/10 text-emerald-600 border-emerald-500/30",
+  cancelled: "bg-secondary text-secondary-foreground border-transparent",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  pending: "대기",
+  awaiting_approval: "승인 대기",
+  approved: "승인됨",
+  paid: "결제 완료",
+  cancelled: "취소됨",
+};
+
 interface BanDialogState {
   open: boolean;
   userId: string;
   username: string;
 }
 
+interface ApproveDialogState {
+  open: boolean;
+  paymentId: string;
+  orderId: string;
+  amount: number;
+  serverName: string;
+  clientName: string;
+}
+
 export default function AdminDashboard() {
   const { data: user } = useGetMe();
   const { data: stats } = useGetAdminStats();
   const { data: users, isLoading: usersLoading, refetch } = useGetAdminUsers({ limit: 100 });
+  const { data: payments, isLoading: paymentsLoading } = useGetPaymentRequests();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const banMutation = useBanUser();
   const unbanMutation = useUnbanUser();
+  const approveMutation = useApprovePayment();
+  const markPaidMutation = useMarkPaymentPaid();
+  const announceMutation = useAdminAnnounce();
 
   const [banDialog, setBanDialog] = useState<BanDialogState>({ open: false, userId: "", username: "" });
   const [banReason, setBanReason] = useState("");
+  const [approveDialog, setApproveDialog] = useState<ApproveDialogState>({
+    open: false, paymentId: "", orderId: "", amount: 0, serverName: "", clientName: "",
+  });
+  const [tossLink, setTossLink] = useState("");
+  const [announceTitle, setAnnounceTitle] = useState("");
+  const [announceContent, setAnnounceContent] = useState("");
 
   const isSuperAdmin = user?.username === "bini2222";
   const isAdmin = user?.role === "admin" || isSuperAdmin;
@@ -104,6 +144,63 @@ export default function AdminDashboard() {
     }
   };
 
+  const openApproveDialog = (p: { id: string; order_id: string; amount: number; server_name?: string | null; client_display_name?: string | null; client_username?: string | null }) => {
+    setTossLink("");
+    setApproveDialog({
+      open: true,
+      paymentId: p.id,
+      orderId: p.order_id,
+      amount: p.amount,
+      serverName: p.server_name || "서버",
+      clientName: p.client_display_name || p.client_username || "고객",
+    });
+  };
+
+  const handleApprove = async () => {
+    if (!tossLink.trim()) {
+      toast({ variant: "destructive", title: "Toss 링크를 입력해주세요." });
+      return;
+    }
+    try {
+      await approveMutation.mutateAsync({
+        paymentId: approveDialog.paymentId,
+        orderId: approveDialog.orderId,
+        amount: approveDialog.amount,
+        tossLink: tossLink.trim(),
+      });
+      toast({ title: "✅ 결제가 승인되었습니다.", description: "고객 채팅에 토스 링크가 전달되었습니다." });
+      setApproveDialog({ open: false, paymentId: "", orderId: "", amount: 0, serverName: "", clientName: "" });
+    } catch (e) {
+      toast({ variant: "destructive", title: "승인 실패", description: String(e) });
+    }
+  };
+
+  const handleMarkPaid = async (paymentId: string, orderId: string) => {
+    try {
+      await markPaidMutation.mutateAsync({ paymentId, orderId });
+      toast({ title: "✅ 결제 완료 처리되었습니다.", description: "주문이 완료 상태로 변경되었습니다." });
+    } catch (e) {
+      toast({ variant: "destructive", title: "처리 실패", description: String(e) });
+    }
+  };
+
+  const handleAnnounce = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!announceTitle.trim() || !announceContent.trim()) return;
+    try {
+      const result = await announceMutation.mutateAsync({ title: announceTitle.trim(), content: announceContent.trim() });
+      toast({ title: "📢 공지 발송 완료", description: `${result.notified}명에게 알림이 전달되었습니다.` });
+      setAnnounceTitle("");
+      setAnnounceContent("");
+    } catch (e) {
+      toast({ variant: "destructive", title: "공지 발송 실패", description: String(e) });
+    }
+  };
+
+  // 결제 요청 목록 (awaiting_approval + approved)
+  const pendingPayments = (payments ?? []).filter(p => p.status === "awaiting_approval");
+  const approvedPayments = (payments ?? []).filter(p => p.status === "approved");
+
   return (
     <div className="space-y-6">
       <div>
@@ -124,7 +221,7 @@ export default function AdminDashboard() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">₩{stats?.revenue_total?.toLocaleString() || 0}</div>
+            <div className="text-2xl font-bold">₩{(stats?.revenue_total ?? 0).toLocaleString()}</div>
           </CardContent>
         </Card>
         <Card>
@@ -133,7 +230,8 @@ export default function AdminDashboard() {
             <ShoppingCart className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.total_orders || 0}건</div>
+            <div className="text-2xl font-bold">{stats?.total_orders ?? 0}건</div>
+            <p className="text-xs text-muted-foreground mt-1">이번 주 {stats?.orders_this_week ?? 0}건</p>
           </CardContent>
         </Card>
         <Card>
@@ -142,7 +240,8 @@ export default function AdminDashboard() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats?.total_users || 0}명</div>
+            <div className="text-2xl font-bold">{stats?.total_users ?? 0}명</div>
+            <p className="text-xs text-muted-foreground mt-1">상담사 {stats?.total_counselors ?? 0} · 개발자 {stats?.total_developers ?? 0}</p>
           </CardContent>
         </Card>
         <Card>
@@ -151,21 +250,147 @@ export default function AdminDashboard() {
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{(stats?.consulting_orders || 0) + (stats?.building_orders || 0)}개</div>
+            <div className="text-2xl font-bold">{(stats?.consulting_orders ?? 0) + (stats?.building_orders ?? 0)}개</div>
+            <p className="text-xs text-muted-foreground mt-1">상담 {stats?.consulting_orders ?? 0} · 제작 {stats?.building_orders ?? 0}</p>
           </CardContent>
         </Card>
       </div>
+
+      {/* 결제 승인 대기 (슈퍼관리자만) */}
+      {isSuperAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5 text-primary" />
+              결제 승인 관리
+              {pendingPayments.length > 0 && (
+                <Badge className="bg-primary text-primary-foreground">{pendingPayments.length}건 대기</Badge>
+              )}
+            </CardTitle>
+            <CardDescription>
+              개발자가 확정한 가격을 승인하면 고객 채팅에 토스 결제 링크가 자동 전달됩니다.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {paymentsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : pendingPayments.length === 0 && approvedPayments.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">대기 중인 결제 요청이 없습니다.</p>
+            ) : (
+              <div className="space-y-3">
+                {[...pendingPayments, ...approvedPayments].map(p => (
+                  <div key={p.id} className="flex items-center justify-between p-4 rounded-xl border bg-card gap-4">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-semibold truncate">{p.server_name}</span>
+                        <Badge variant="outline" className={STATUS_COLORS[p.status] || ""}>
+                          {STATUS_LABELS[p.status] || p.status}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        고객: {p.client_display_name || p.client_username || "—"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{new Date(p.created_at).toLocaleDateString()}</p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-lg font-bold text-primary">₩{Number(p.amount).toLocaleString()}</p>
+                      <div className="flex gap-2 mt-2">
+                        {p.status === "awaiting_approval" && (
+                          <Button
+                            size="sm"
+                            className="h-8 gap-1.5 text-xs"
+                            onClick={() => openApproveDialog(p)}
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            승인
+                          </Button>
+                        )}
+                        {p.status === "approved" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 gap-1.5 text-xs text-emerald-600 border-emerald-500/30"
+                            onClick={() => handleMarkPaid(p.id, p.order_id)}
+                            disabled={markPaidMutation.isPending}
+                          >
+                            {markPaidMutation.isPending
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              : <CheckCircle2 className="h-3.5 w-3.5" />
+                            }
+                            결제 완료
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 공지 발송 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Megaphone className="h-5 w-5 text-primary" />
+            전체 공지 발송
+          </CardTitle>
+          <CardDescription>
+            모든 사용자에게 알림과 함께 공지를 발송합니다.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleAnnounce} className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="ann-title">제목</Label>
+              <Input
+                id="ann-title"
+                value={announceTitle}
+                onChange={e => setAnnounceTitle(e.target.value)}
+                placeholder="공지 제목을 입력하세요"
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ann-content">내용</Label>
+              <Textarea
+                id="ann-content"
+                value={announceContent}
+                onChange={e => setAnnounceContent(e.target.value)}
+                placeholder="공지 내용을 입력하세요"
+                rows={4}
+                required
+              />
+            </div>
+            <Button
+              type="submit"
+              className="gap-2"
+              disabled={announceMutation.isPending || !announceTitle.trim() || !announceContent.trim()}
+            >
+              {announceMutation.isPending
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : <Megaphone className="h-4 w-4" />
+              }
+              전체 발송
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
 
       {/* Member Management */}
       <Card>
         <CardHeader>
           <CardTitle>멤버 관리</CardTitle>
-          <p className="text-sm text-muted-foreground">
+          <CardDescription>
             역할을 변경하면 해당 계정의 접근 권한이 즉시 바뀝니다.
             {isSuperAdmin && (
               <span className="ml-2 text-destructive font-medium">슈퍼관리자 전용: 차단/해제 기능 사용 가능</span>
             )}
-          </p>
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {usersLoading ? (
@@ -178,7 +403,7 @@ export default function AdminDashboard() {
                 <thead>
                   <tr className="border-b">
                     <th className="h-12 px-4 text-left font-medium text-muted-foreground">이름</th>
-                    <th className="h-12 px-4 text-left font-medium text-muted-foreground">Discord</th>
+                    <th className="h-12 px-4 text-left font-medium text-muted-foreground">Discord ID</th>
                     <th className="h-12 px-4 text-left font-medium text-muted-foreground">이메일</th>
                     <th className="h-12 px-4 text-left font-medium text-muted-foreground">현재 역할</th>
                     <th className="h-12 px-4 text-left font-medium text-muted-foreground">역할 변경</th>
@@ -345,6 +570,69 @@ export default function AdminDashboard() {
             >
               {banMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
               차단하기
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 결제 승인 Dialog */}
+      <Dialog open={approveDialog.open} onOpenChange={(v) => { if (!v) setApproveDialog(p => ({ ...p, open: false })); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-primary">
+              <CheckCircle2 className="h-5 w-5" />
+              결제 승인 — {approveDialog.serverName}
+            </DialogTitle>
+            <DialogDescription>
+              고객 <strong>{approveDialog.clientName}</strong>에게{" "}
+              <strong>₩{approveDialog.amount.toLocaleString()}</strong> 결제 링크를 전달합니다.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 text-sm">
+              <p className="font-medium text-primary mb-1">💡 Toss 링크 생성 방법</p>
+              <ol className="space-y-1 text-muted-foreground text-xs list-decimal list-inside">
+                <li>토스 앱 → 송금 → 내 링크 복사</li>
+                <li>또는 <code className="bg-muted px-1 rounded">toss.me/아이디/금액</code> 형식으로 입력</li>
+                <li>예: <code className="bg-muted px-1 rounded">https://toss.me/bini2222/30000</code></li>
+              </ol>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="toss-link">Toss 결제 링크</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="toss-link"
+                  value={tossLink}
+                  onChange={e => setTossLink(e.target.value)}
+                  placeholder="https://toss.me/아이디/금액"
+                  required
+                />
+                {tossLink && (
+                  <Button variant="outline" size="icon" asChild>
+                    <a href={tossLink} target="_blank" rel="noreferrer">
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setApproveDialog(p => ({ ...p, open: false }))}>
+              취소
+            </Button>
+            <Button
+              onClick={handleApprove}
+              disabled={approveMutation.isPending || !tossLink.trim()}
+              className="gap-2"
+            >
+              {approveMutation.isPending
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : <CheckCircle2 className="h-4 w-4" />
+              }
+              승인 및 전달
             </Button>
           </DialogFooter>
         </DialogContent>

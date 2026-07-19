@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>DIRO</title>
+  <script>
+    // GitHub Pages SPA 라우팅: 404를 index.html로 리다이렉트
+    // 경로를 query string으로 인코딩하여 index.html의 스크립트가 복원
+    var l = window.location;
+    var base = l.pathname.split('/').slice(0, 2).join('/');
+    var path = l.pathname.slice(base.length) || '/';
+    var query = l.search ? '&q=' + encodeURIComponent(l.search.slice(1)) : '';
+    l.replace(base + '/?p=' + encodeURIComponent(path) + query + l.hash);
+  </script>
+</head>
+<body></body>
+</html>

@@ -277,8 +277,8 @@ function ApplyDialog({ open, onClose, orderId, onSaveFirst }: ApplyDialogProps) 
   const verifyBot = useVerifyBot();
   const applyDiscord = useApplyDiscord();
   const [serverId, setServerId] = useState("");
-  const [verifyResult, setVerifyResult] = useState<{ inServer: boolean; serverName: string | null } | null>(null);
-  const [applyResult, setApplyResult] = useState<{ success: boolean; appliedItems: string[]; error: string | null } | null>(null);
+  const [verifyResult, setVerifyResult] = useState<{ in_server: boolean; server_name: string | null; error: string | null } | null>(null);
+  const [applyResult, setApplyResult] = useState<{ success: boolean; applied_items: string[]; error: string | null } | null>(null);
   const [step, setStep] = useState<"input" | "verified" | "done">("input");
 
   const reset = () => {
@@ -365,7 +365,7 @@ function ApplyDialog({ open, onClose, orderId, onSaveFirst }: ApplyDialogProps) 
             <div className="flex items-center gap-3 p-3 rounded-lg bg-green-500/10 text-green-400">
               <CheckCircle2 className="h-5 w-5 shrink-0" />
               <div>
-                <p className="font-medium text-sm">{verifyResult.serverName}</p>
+                <p className="font-medium text-sm">{verifyResult.server_name}</p>
                 <p className="text-xs opacity-80">봇이 서버에 있습니다</p>
               </div>
             </div>
@@ -387,10 +387,10 @@ function ApplyDialog({ open, onClose, orderId, onSaveFirst }: ApplyDialogProps) 
               {applyResult.success ? <CheckCircle2 className="h-4 w-4 shrink-0" /> : <AlertTriangle className="h-4 w-4 shrink-0" />}
               {applyResult.success ? "성공적으로 적용되었습니다!" : `오류: ${applyResult.error}`}
             </div>
-            {applyResult.appliedItems.length > 0 && (
+            {applyResult.applied_items.length > 0 && (
               <ScrollArea className="h-36 rounded-md bg-[#1E1F22] p-3">
                 <p className="text-xs text-[#949BA4] mb-2 font-bold uppercase tracking-wide">적용된 항목</p>
-                {applyResult.appliedItems.map((item, i) => (
+                {applyResult.applied_items.map((item, i) => (
                   <p key={i} className="text-xs text-[#DBDEE1] py-0.5">✓ {item}</p>
                 ))}
               </ScrollArea>

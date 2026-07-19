@@ -4,6 +4,18 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
     <title>DIRO</title>
+    <script>
+      // GitHub Pages SPA 라우팅 복원: 404.html이 /?p=경로 로 리다이렉트한 것을 처리
+      (function() {
+        var qs = window.location.search;
+        if (qs.indexOf('?p=') === 0 || qs.indexOf('&p=') !== -1) {
+          var params = new URLSearchParams(qs);
+          var path = params.get('p') || '/';
+          var query = params.get('q') ? '?' + params.get('q') : '';
+          window.history.replaceState(null, '', path + query + window.location.hash);
+        }
+      })();
+    </script>
     <meta name="description" content="DIRO — built on Replit. Update this description to reflect the app." />
     <meta name="robots" content="index, follow" />
     <meta property="og:title" content="DIRO" />

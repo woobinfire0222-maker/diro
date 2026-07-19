@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { Send, Image as ImageIcon, Paperclip, Loader2, Info, MessageCircle, DollarSign, X, CheckCircle2 } from "lucide-react";
-import { useGetOrders, useListMessages, useSendMessage, useGetMe, Message, Order } from "@/lib/db";
+import { useGetOrders, useListMessages, useSendMessage, useGetMe, useRequestPaymentApproval, Message, Order } from "@/lib/db";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -64,9 +64,9 @@ function ChatMessage({ message, isMe }: { message: Message, isMe: boolean }) {
 // Panel for developer to confirm price and request bini2222 approval
 function DevPricePanel({ order, onClose }: { order: ExtendedOrder; onClose: () => void }) {
   const [amount, setAmount] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const { toast } = useToast();
+  const requestApproval = useRequestPaymentApproval();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,23 +76,17 @@ function DevPricePanel({ order, onClose }: { order: ExtendedOrder; onClose: () =
       return;
     }
 
-    setIsSubmitting(true);
     try {
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (!authUser) throw new Error("Not authenticated");
-      const { error } = await supabase.from("payment_requests").insert({
-        order_id: order.id,
-        user_id: authUser.id,
-        amount: numAmount,
-        status: "pending",
-      });
-      if (error) throw error;
+      const result = await requestApproval.mutateAsync({ orderId: order.id, amount: numAmount });
       setSubmitted(true);
-      toast({ title: "✅ 승인 요청 전송됨", description: "bini2222에게 Discord DM으로 알림이 전송되었습니다." });
+      toast({
+        title: "✅ 승인 요청 전송됨",
+        description: result.discord_notified
+          ? "bini2222에게 Discord DM으로 알림이 전송되었습니다."
+          : "결제 요청이 생성되었습니다. 관리자 패널에서 확인 가능합니다.",
+      });
     } catch (e) {
       toast({ variant: "destructive", title: "전송 실패", description: String(e) });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -140,9 +134,9 @@ function DevPricePanel({ order, onClose }: { order: ExtendedOrder; onClose: () =
               type="submit"
               size="sm"
               className="bg-amber-500 hover:bg-amber-600 text-white h-9"
-              disabled={isSubmitting}
+              disabled={requestApproval.isPending}
             >
-              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "승인 요청 전송"}
+              {requestApproval.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "승인 요청 전송"}
             </Button>
             <Button variant="ghost" size="icon" className="h-9 w-9" type="button" onClick={onClose}>
               <X className="h-4 w-4" />

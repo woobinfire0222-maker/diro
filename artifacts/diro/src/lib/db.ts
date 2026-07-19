@@ -75,6 +75,7 @@ export interface AdminStats {
   total_orders: number;
   total_users: number;
   total_counselors: number;
+  total_developers: number;
   pending_orders: number;
   consulting_orders: number;
   building_orders: number;
@@ -541,6 +542,7 @@ export function useGetAdminStats() {
         { count: totalOrders },
         { count: totalUsers },
         { count: totalCounselors },
+        { count: totalDevelopers },
         { data: byStatus },
         { data: revenueData },
         { count: ordersThisWeek },
@@ -549,6 +551,7 @@ export function useGetAdminStats() {
         supabase.from("orders").select("id", { count: "exact", head: true }),
         supabase.from("users").select("id", { count: "exact", head: true }),
         supabase.from("users").select("id", { count: "exact", head: true }).eq("role", "counselor"),
+        supabase.from("users").select("id", { count: "exact", head: true }).eq("role", "developer"),
         supabase.from("orders").select("status"),
         supabase.from("payment_requests").select("amount").eq("status", "paid"),
         supabase.from("orders").select("id", { count: "exact", head: true }).gte("created_at", weekAgo.toISOString()),
@@ -566,6 +569,7 @@ export function useGetAdminStats() {
         total_orders: totalOrders ?? 0,
         total_users: totalUsers ?? 0,
         total_counselors: totalCounselors ?? 0,
+        total_developers: totalDevelopers ?? 0,
         pending_orders: sc.pending ?? 0,
         consulting_orders: sc.consulting ?? 0,
         building_orders: sc.building ?? 0,
@@ -626,6 +630,157 @@ export function useGetAdminUsers(params?: { limit?: number; role?: string }) {
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as UserProfile[];
+    },
+  });
+}
+
+// ─── 결제 요청 ────────────────────────────────────────────────────────────────
+
+export interface PaymentRequest {
+  id: string;
+  order_id: string;
+  user_id: string | null;
+  amount: number;
+  status: "pending" | "awaiting_approval" | "approved" | "paid" | "cancelled";
+  method: string | null;
+  notes: string | null;
+  created_at: string;
+  // joined
+  order_number?: string | null;
+  server_name?: string | null;
+  client_username?: string | null;
+  client_display_name?: string | null;
+}
+
+/** 개발자: edge function을 통해 결제 승인 요청 전송 */
+export function useRequestPaymentApproval() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ orderId, amount }: { orderId: string; amount: number }) => {
+      const { data, error } = await supabase.functions.invoke("request-payment-approval", {
+        body: { order_id: orderId, amount },
+      });
+      if (error) throw new Error(error.message || "결제 요청 전송 실패");
+      if (data?.error) throw new Error(data.error);
+      return data as { success: boolean; payment_request_id: string; discord_notified: boolean };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["orders"] });
+      qc.invalidateQueries({ queryKey: ["paymentRequests"] });
+    },
+  });
+}
+
+/** 관리자: 결제 요청 목록 조회 */
+export function useGetPaymentRequests(options?: { query?: { enabled?: boolean } }) {
+  return useQuery<PaymentRequest[]>({
+    queryKey: ["paymentRequests"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("payment_requests")
+        .select(`
+          *,
+          _order:orders!order_id(order_number, server_name,
+            _user:users!user_id(username, display_name)
+          )
+        `)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []).map((row: any) => ({
+        ...row,
+        order_number: row._order?.order_number ?? null,
+        server_name: row._order?.server_name ?? null,
+        client_username: row._order?._user?.username ?? null,
+        client_display_name: row._order?._user?.display_name ?? null,
+        _order: undefined,
+      })) as PaymentRequest[];
+    },
+    enabled: options?.query?.enabled ?? true,
+  });
+}
+
+/** 슈퍼관리자: 결제 승인 — 고객 채팅에 Toss 결제 메시지 삽입 */
+export function useApprovePayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      paymentId,
+      orderId,
+      amount,
+      tossLink,
+    }: {
+      paymentId: string;
+      orderId: string;
+      amount: number;
+      tossLink: string;
+    }) => {
+      // 1. 결제 요청 상태 → approved
+      const { error: pe } = await supabase
+        .from("payment_requests")
+        .update({ status: "approved" })
+        .eq("id", paymentId);
+      if (pe) throw new Error(pe.message || "결제 승인 실패");
+
+      // 2. 고객 채팅에 결제 메시지 삽입 (bini2222는 is_superadmin()이므로 RLS 통과)
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) throw new Error("Not authenticated");
+
+      const { error: me } = await supabase.from("order_messages").insert({
+        order_id: orderId,
+        sender_id: authUser.id,
+        content: `결제 요청이 승인되었습니다. 아래 버튼으로 ₩${Number(amount).toLocaleString("ko-KR")} 를 송금해주세요.`,
+        type: "payment",
+        metadata_json: JSON.stringify({ deeplink: tossLink, amount }),
+      });
+      if (me) throw new Error(me.message || "결제 메시지 삽입 실패");
+
+      return true;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["paymentRequests"] });
+      qc.invalidateQueries({ queryKey: ["orders"] });
+    },
+  });
+}
+
+/** 슈퍼관리자: 결제 완료 처리 */
+export function useMarkPaymentPaid() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ paymentId, orderId }: { paymentId: string; orderId: string }) => {
+      const { error: pe } = await supabase
+        .from("payment_requests")
+        .update({ status: "paid" })
+        .eq("id", paymentId);
+      if (pe) throw new Error(pe.message);
+
+      const { error: oe } = await supabase
+        .from("orders")
+        .update({ status: "completed", updated_at: new Date().toISOString() })
+        .eq("id", orderId);
+      if (oe) throw new Error(oe.message);
+
+      return true;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["paymentRequests"] });
+      qc.invalidateQueries({ queryKey: ["orders"] });
+    },
+  });
+}
+
+// ─── 공지 ─────────────────────────────────────────────────────────────────────
+
+/** 관리자: 전체 공지 발송 (edge function — service role로 모든 사용자에게 알림) */
+export function useAdminAnnounce() {
+  return useMutation({
+    mutationFn: async ({ title, content }: { title: string; content: string }) => {
+      const { data, error } = await supabase.functions.invoke("admin-announce", {
+        body: { title, content },
+      });
+      if (error) throw new Error(error.message || "공지 발송 실패");
+      if (data?.error) throw new Error(data.error);
+      return data as { success: boolean; notified: number; announcement_id: string };
     },
   });
 }
