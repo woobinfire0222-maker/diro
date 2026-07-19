@@ -6,7 +6,8 @@ type AuthContextType = {
   session: Session | null;
   user: User | null;
   loading: boolean;
-  signInWithDiscord: () => Promise<void>;
+  signUp: (email: string, password: string, username: string) => Promise<{ error: string | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 };
 
@@ -32,39 +33,40 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
-  const signInWithDiscord = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: 'discord',
+  const signUp = async (email: string, password: string, username: string): Promise<{ error: string | null }> => {
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
       options: {
-        redirectTo: window.location.origin,
+        data: { username, full_name: username },
       },
     });
+    if (error) return { error: error.message };
+    return { error: null };
+  };
+
+  const signIn = async (email: string, password: string): Promise<{ error: string | null }> => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return { error: error.message };
+    return { error: null };
   };
 
   const signOut = async () => {
     await supabase.auth.signOut();
   };
 
-  const value = {
-    session,
-    user,
-    loading,
-    signInWithDiscord,
-    signOut,
-  };
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ session, user, loading, signUp, signIn, signOut }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within a SupabaseProvider');
-  }
+  if (context === undefined) throw new Error('useAuth must be used within a SupabaseProvider');
   return context;
 }
