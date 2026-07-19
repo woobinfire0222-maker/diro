@@ -25,8 +25,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     { name: "설정", icon: Settings, path: "/settings" },
   ];
 
-  if (user?.role === "admin" || user?.role === "counselor") {
-    navItems.push({ name: "상담원", icon: Headset, path: "/counselor" });
+  if (user?.role === "admin" || user?.role === "counselor" || user?.role === "developer") {
+    navItems.push({ name: "파트너", icon: Headset, path: "/counselor" });
   }
 
   if (user?.role === "admin") {

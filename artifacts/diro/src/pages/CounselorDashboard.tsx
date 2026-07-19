@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { Search, MessageSquare, Play, CheckCircle, Code2, Loader2 } from "lucide-react";
+import { Search, MessageSquare, Play, CheckCircle, Code2, Loader2, Headset, Wrench } from "lucide-react";
 import { useGetOrders, useGetMe, Order, useUpdateOrder } from "@workspace/api-client-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,7 @@ export default function CounselorDashboard() {
   const isDeveloper = user?.role === "developer";
   const isCounselor = user?.role === "counselor";
   const isAdmin = user?.role === "admin";
+  const isSuperAdmin = user?.username === "bini2222";
 
   if (!isCounselor && !isDeveloper && !isAdmin) {
     return <div className="p-8 text-center text-destructive">접근 권한이 없습니다.</div>;
@@ -191,30 +192,116 @@ export default function CounselorDashboard() {
     <div className="col-span-full py-12 text-center text-muted-foreground border rounded-xl">{text}</div>
   );
 
+  // ── Counselor section ──
+  const CounselorSection = () => (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Headset className="h-4 w-4 text-primary" />
+        <h2 className="text-base font-semibold">상담원 뷰</h2>
+        <span className="text-xs text-muted-foreground">— 고객 요청 배정 및 상담 관리</span>
+      </div>
+      <Tabs defaultValue="mine" className="w-full">
+        <TabsList className="grid w-full grid-cols-3 max-w-md">
+          <TabsTrigger value="mine">내 담당 진행중 ({myConsultingOrders.length})</TabsTrigger>
+          <TabsTrigger value="pending">새로운 요청 ({pendingOrders.length})</TabsTrigger>
+          <TabsTrigger value="completed">완료됨 ({completedOrders.length})</TabsTrigger>
+        </TabsList>
+        <TabsContent value="mine" className="mt-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {myConsultingOrders.length > 0
+              ? myConsultingOrders.map(o => renderCounselorCard(o, true))
+              : <EmptyState text="진행 중인 담당 프로젝트가 없습니다." />}
+          </div>
+        </TabsContent>
+        <TabsContent value="pending" className="mt-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {pendingOrders.length > 0
+              ? pendingOrders.map(o => renderCounselorCard(o, false))
+              : <EmptyState text="대기 중인 새로운 요청이 없습니다." />}
+          </div>
+        </TabsContent>
+        <TabsContent value="completed" className="mt-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {completedOrders.length > 0
+              ? completedOrders.map(o => renderCounselorCard(o, true))
+              : <EmptyState text="완료된 프로젝트가 없습니다." />}
+          </div>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+
+  // ── Developer section ──
+  const DevSection = () => (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <Wrench className="h-4 w-4 text-emerald-500" />
+        <h2 className="text-base font-semibold">개발자 뷰</h2>
+        <span className="text-xs text-muted-foreground">— 개발 이어받기 및 가격 확정</span>
+      </div>
+      <Tabs defaultValue="pickup" className="w-full">
+        <TabsList className="grid w-full grid-cols-3 max-w-md">
+          <TabsTrigger value="pickup">이어받기 ({consultingToPickup.length})</TabsTrigger>
+          <TabsTrigger value="mine">내 개발 진행중 ({myBuildingOrders.length})</TabsTrigger>
+          <TabsTrigger value="done">완료됨 ({devCompletedOrders.length})</TabsTrigger>
+        </TabsList>
+        <TabsContent value="pickup" className="mt-4">
+          <p className="text-sm text-muted-foreground mb-4">상담이 완료되어 개발을 기다리는 주문입니다. 이어받기를 클릭하면 내 담당이 됩니다.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {consultingToPickup.length > 0
+              ? consultingToPickup.map(o => renderDevCard(o, false))
+              : <EmptyState text="이어받을 수 있는 상담 완료 주문이 없습니다." />}
+          </div>
+        </TabsContent>
+        <TabsContent value="mine" className="mt-4">
+          <p className="text-sm text-muted-foreground mb-4">채팅 버튼을 눌러 신청자와 소통하고, 채팅 화면에서 가격을 확정하세요.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {myBuildingOrders.length > 0
+              ? myBuildingOrders.map(o => renderDevCard(o, true))
+              : <EmptyState text="진행 중인 개발 프로젝트가 없습니다." />}
+          </div>
+        </TabsContent>
+        <TabsContent value="done" className="mt-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {devCompletedOrders.length > 0
+              ? devCompletedOrders.map(o => renderDevCard(o, true))
+              : <EmptyState text="완료된 프로젝트가 없습니다." />}
+          </div>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+
   return (
     <div className="space-y-6 animate-in fade-in">
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-primary flex items-center gap-2">
-            <span className={`text-xs px-2 py-1 rounded ${isDeveloper ? "bg-emerald-500 text-white" : "bg-primary text-primary-foreground"}`}>
-              {isDeveloper ? "개발자" : isAdmin ? "관리자" : "상담원"}
+            <span className={`text-xs px-2 py-1 rounded ${
+              isAdmin ? "bg-purple-600 text-white" :
+              isDeveloper ? "bg-emerald-500 text-white" :
+              "bg-primary text-primary-foreground"
+            }`}>
+              {isAdmin ? "슈퍼관리자" : isDeveloper ? "개발자" : "상담원"}
             </span>
             DIRO 파트너 대시보드
           </h1>
           <p className="text-muted-foreground">
-            {isDeveloper
+            {isAdmin
+              ? "상담원과 개발자의 모든 작업 현황을 한눈에 확인하세요."
+              : isDeveloper
               ? "상담이 완료된 주문을 이어받아 서버를 제작하고 가격을 설정하세요."
               : "고객의 요청을 확인하고 최고의 서버를 제작해주세요."}
           </p>
         </div>
-        
+
         <div className="flex items-center gap-2 w-full md:w-auto">
           <div className="relative flex-1 md:w-64">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input 
-              type="search" 
-              placeholder="주문번호, 서버명 검색..." 
-              className="pl-8" 
+            <Input
+              type="search"
+              placeholder="주문번호, 서버명 검색..."
+              className="pl-8"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -222,74 +309,20 @@ export default function CounselorDashboard() {
         </div>
       </div>
 
-      {/* ── Developer View ── */}
-      {isDeveloper ? (
-        <Tabs defaultValue="pickup" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 max-w-md">
-            <TabsTrigger value="pickup">이어받기 ({consultingToPickup.length})</TabsTrigger>
-            <TabsTrigger value="mine">내 개발 진행중 ({myBuildingOrders.length})</TabsTrigger>
-            <TabsTrigger value="done">완료됨 ({devCompletedOrders.length})</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="pickup" className="mt-6">
-            <p className="text-sm text-muted-foreground mb-4">상담이 완료되어 개발을 기다리는 주문입니다. 이어받기를 클릭하면 내 담당이 됩니다.</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {consultingToPickup.length > 0
-                ? consultingToPickup.map(o => renderDevCard(o, false))
-                : <EmptyState text="이어받을 수 있는 상담 완료 주문이 없습니다." />}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="mine" className="mt-6">
-            <p className="text-sm text-muted-foreground mb-4">채팅 버튼을 눌러 신청자와 소통하고, 채팅 화면에서 가격을 확정하세요.</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {myBuildingOrders.length > 0
-                ? myBuildingOrders.map(o => renderDevCard(o, true))
-                : <EmptyState text="진행 중인 개발 프로젝트가 없습니다." />}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="done" className="mt-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {devCompletedOrders.length > 0
-                ? devCompletedOrders.map(o => renderDevCard(o, true))
-                : <EmptyState text="완료된 프로젝트가 없습니다." />}
-            </div>
-          </TabsContent>
-        </Tabs>
+      {/* ── Admin: both sections ── */}
+      {isAdmin ? (
+        <div className="space-y-10">
+          <CounselorSection />
+          <div className="border-t pt-8">
+            <DevSection />
+          </div>
+        </div>
+      ) : isDeveloper ? (
+        /* ── Developer only ── */
+        <DevSection />
       ) : (
-        /* ── Counselor / Admin View ── */
-        <Tabs defaultValue="mine" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 max-w-md">
-            <TabsTrigger value="mine">내 담당 진행중 ({myConsultingOrders.length})</TabsTrigger>
-            <TabsTrigger value="pending">새로운 요청 ({pendingOrders.length})</TabsTrigger>
-            <TabsTrigger value="completed">완료됨 ({completedOrders.length})</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="mine" className="mt-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {myConsultingOrders.length > 0
-                ? myConsultingOrders.map(o => renderCounselorCard(o, true))
-                : <EmptyState text="진행 중인 담당 프로젝트가 없습니다." />}
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="pending" className="mt-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {pendingOrders.length > 0
-                ? pendingOrders.map(o => renderCounselorCard(o, false))
-                : <EmptyState text="대기 중인 새로운 요청이 없습니다." />}
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="completed" className="mt-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {completedOrders.length > 0
-                ? completedOrders.map(o => renderCounselorCard(o, true))
-                : <EmptyState text="완료된 프로젝트가 없습니다." />}
-            </div>
-          </TabsContent>
-        </Tabs>
+        /* ── Counselor only ── */
+        <CounselorSection />
       )}
     </div>
   );
