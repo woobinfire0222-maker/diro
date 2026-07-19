@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useGetMe, useUpdateUser } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,10 +17,12 @@ export default function SettingsPage() {
 
   const [displayName, setDisplayName] = useState("");
 
-  // Sync state when user loads
-  if (user && displayName === "" && user.display_name) {
-    setDisplayName(user.display_name);
-  }
+  // Sync state when user data loads
+  useEffect(() => {
+    if (user) {
+      setDisplayName(user.display_name || user.username || "");
+    }
+  }, [user?.id]);
 
   const handleSaveProfile = async () => {
     if (!user) return;

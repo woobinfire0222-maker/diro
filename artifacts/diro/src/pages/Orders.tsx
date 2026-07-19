@@ -343,7 +343,15 @@ export default function OrdersPage() {
               </Button>
               
               {step < 4 ? (
-                <Button onClick={() => setStep(step + 1)}>다음 단계</Button>
+                <Button onClick={async () => {
+                  const stepFields: Record<number, (keyof OrderFormValues)[]> = {
+                    1: ["server_name", "atmosphere"],
+                    2: ["category_count", "text_channel_count", "voice_channel_count"],
+                    3: [],
+                  };
+                  const valid = await form.trigger(stepFields[step]);
+                  if (valid) setStep(step + 1);
+                }}>다음 단계</Button>
               ) : (
                 <Button onClick={form.handleSubmit(onSubmit)} disabled={createOrderMutation.isPending}>
                   {createOrderMutation.isPending ? "제출 중..." : "신청 완료"}
