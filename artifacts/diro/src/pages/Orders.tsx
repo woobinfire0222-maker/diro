@@ -28,7 +28,6 @@ const orderFormSchema = z.object({
   voice_channel_count: z.number().min(0).max(100).default(5),
   desired_roles: z.string().optional(),
   desired_permissions: z.string().optional(),
-  desired_features: z.string().optional(),
   budget: z.number().min(10000, { message: "최소 예산은 10,000원입니다." }),
   additional_notes: z.string().optional(),
 });
@@ -58,7 +57,6 @@ export default function OrdersPage() {
       voice_channel_count: 5,
       desired_roles: "",
       desired_permissions: "",
-      desired_features: "",
       budget: 50000,
       additional_notes: "",
     },
@@ -279,18 +277,6 @@ export default function OrdersPage() {
                             <FormLabel>특수 권한 요청</FormLabel>
                             <FormControl>
                               <Textarea placeholder="예: 특정 역할만 접근 가능한 비밀 채널 구성 등" className="resize-none" {...field} />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name="desired_features"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>원하는 봇 기능/특수 기능</FormLabel>
-                            <FormControl>
-                              <Textarea placeholder="예: 환영 메시지 봇, 음악 봇, 인증 시스템 등" className="resize-none" {...field} />
                             </FormControl>
                           </FormItem>
                         )}
