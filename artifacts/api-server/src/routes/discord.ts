@@ -7,7 +7,7 @@ import type { Request, Response } from "express";
 const router = Router();
 
 // Verify bot is in server
-router.post("/verify", requireAuth, requireRole("counselor", "admin"), async (req: Request, res: Response) => {
+router.post("/verify", requireAuth, requireRole("counselor", "developer", "admin"), async (req: Request, res: Response) => {
   try {
     const { server_id } = req.body;
 
@@ -35,7 +35,7 @@ router.post("/verify", requireAuth, requireRole("counselor", "admin"), async (re
 });
 
 // Apply server config to Discord
-router.post("/apply", requireAuth, requireRole("counselor", "admin"), async (req: Request, res: Response) => {
+router.post("/apply", requireAuth, requireRole("counselor", "developer", "admin"), async (req: Request, res: Response) => {
   try {
     const { order_id, server_id } = req.body;
 

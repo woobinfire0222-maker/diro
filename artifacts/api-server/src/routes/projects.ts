@@ -29,7 +29,7 @@ router.get("/:orderId", requireAuth, async (req: Request, res: Response) => {
 });
 
 // Update server project
-router.put("/:orderId", requireAuth, requireRole("counselor", "admin"), async (req: Request, res: Response) => {
+router.put("/:orderId", requireAuth, requireRole("counselor", "developer", "admin"), async (req: Request, res: Response) => {
   try {
     const { orderId } = req.params;
     const { config_json } = req.body;
@@ -77,7 +77,7 @@ router.put("/:orderId", requireAuth, requireRole("counselor", "admin"), async (r
 });
 
 // Send preview to client
-router.post("/:orderId/preview", requireAuth, requireRole("counselor", "admin"), async (req: Request, res: Response) => {
+router.post("/:orderId/preview", requireAuth, requireRole("counselor", "developer", "admin"), async (req: Request, res: Response) => {
   try {
     const user = req.authUser!;
     const { orderId } = req.params;

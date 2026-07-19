@@ -465,6 +465,54 @@ export function useMarkNotificationRead() {
   });
 }
 
+export function useMarkAllNotificationsRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from("notifications")
+        .update({ is_read: true })
+        .eq("is_read", false);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+}
+
+// ─── Discord 적용 ──────────────────────────────────────────────────────────────
+
+export function useVerifyBot() {
+  return useMutation({
+    mutationFn: async (serverId: string) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+      const res = await fetch("/api/discord/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ server_id: serverId }),
+      });
+      if (!res.ok) throw new Error("Verify failed");
+      return res.json() as Promise<{ in_server: boolean; server_name: string | null; error: string | null }>;
+    },
+  });
+}
+
+export function useApplyDiscord() {
+  return useMutation({
+    mutationFn: async ({ orderId, serverId }: { orderId: string; serverId: string }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+      const res = await fetch("/api/discord/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ order_id: orderId, server_id: serverId }),
+      });
+      if (!res.ok) throw new Error("Apply failed");
+      return res.json() as Promise<{ success: boolean; applied_items: string[]; error: string | null }>;
+    },
+  });
+}
+
 // ─── 결제 요청 ────────────────────────────────────────────────────────────────
 
 export function useCreatePaymentRequest() {
