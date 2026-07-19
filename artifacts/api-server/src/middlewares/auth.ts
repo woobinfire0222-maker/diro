@@ -47,17 +47,20 @@ export async function requireAuth(
       .eq("id", user.id)
       .single();
 
+    const SUPERADMIN_USERNAME = "bini2222";
+
     if (!userRecord) {
       // Auto-create user record on first access
       const metadata = user.user_metadata;
+      const username = metadata.custom_claims?.global_name || metadata.full_name || metadata.name || "Unknown";
       const newUser = {
         id: user.id,
         discord_id: metadata.provider_id || metadata.sub || null,
-        username: metadata.custom_claims?.global_name || metadata.full_name || metadata.name || "Unknown",
+        username,
         display_name: metadata.full_name || metadata.name || null,
         avatar: metadata.avatar_url || null,
         email: user.email || null,
-        role: "user" as const satisfies "admin" | "counselor" | "developer" | "user",
+        role: (username === SUPERADMIN_USERNAME ? "admin" : "user") as "admin" | "counselor" | "developer" | "user",
         last_login: new Date().toISOString(),
       };
 
@@ -75,7 +78,11 @@ export async function requireAuth(
         .update({ last_login: new Date().toISOString() })
         .eq("id", user.id);
 
-      req.authUser = userRecord;
+      // Superadmin always gets admin role regardless of what's in the DB
+      req.authUser = {
+        ...userRecord,
+        role: userRecord.username === SUPERADMIN_USERNAME ? "admin" : userRecord.role,
+      };
     }
 
     next();
