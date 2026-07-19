@@ -178,9 +178,27 @@ export default function ChatPage() {
   const extOrders = (orders || []) as ExtendedOrder[];
   const selectedOrder = extOrders.find(o => o.id === selectedOrderId);
 
-  // Developer can set price when they own the building order
-  const isDeveloper = user?.role === "developer";
-  const isMyBuildingOrder = isDeveloper && selectedOrder?.status === "building" && selectedOrder?.developer_id === user?.id;
+  // Any staff member who is the developer_id on a building order can set the price
+  const isStaff = user?.role !== "user";
+  const isMyBuildingOrder = isStaff && selectedOrder?.status === "building" && (selectedOrder as ExtendedOrder)?.developer_id === user?.id;
+
+  // Same-account scenario: current user is BOTH the order's client AND the counselor/developer.
+  // In that case we use sender_role to determine message side instead of sender_id.
+  const isClientOnOrder = selectedOrder?.user_id === user?.id;
+  const isStaffOnOrder = isStaff && user?.id && (
+    selectedOrder?.counselor_id === user.id ||
+    (selectedOrder as ExtendedOrder)?.developer_id === user?.id
+  );
+  const isSameAccountScenario = !!(isClientOnOrder && isStaffOnOrder);
+
+  const getIsMe = (msg: Message): boolean => {
+    if (msg.sender_id !== user?.id) return false;
+    if (isSameAccountScenario) {
+      // Staff-role messages appear on the right (staff side); "user"-role on left (client side)
+      return msg.sender_role !== "user";
+    }
+    return true;
+  };
 
   // Set up real-time subscription
   useEffect(() => {
@@ -322,7 +340,7 @@ export default function ChatPage() {
               </div>
             ) : messages && messages.length > 0 ? (
               messages.map(msg => (
-                <ChatMessage key={msg.id} message={msg} isMe={msg.sender_id === user?.id} />
+                <ChatMessage key={msg.id} message={msg} isMe={getIsMe(msg)} />
               ))
             ) : (
               <div className="h-full flex flex-col items-center justify-center text-muted-foreground">

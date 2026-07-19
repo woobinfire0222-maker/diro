@@ -83,7 +83,8 @@ export default function CounselorDashboard() {
   const completedOrders = filteredOrders.filter(o => o.counselor_id === user?.id && o.status === "completed");
 
   // ── Developer tabs ──
-  const consultingToPickup = filteredOrders.filter(o => o.status === "consulting");
+  // Only show orders where a counselor has explicitly taken them (counselor_id set)
+  const consultingToPickup = filteredOrders.filter(o => o.status === "consulting" && !!o.counselor_id);
   const myBuildingOrders = filteredOrders.filter(o => o.developer_id === user?.id && o.status !== "completed");
   const devCompletedOrders = filteredOrders.filter(o => o.developer_id === user?.id && o.status === "completed");
 

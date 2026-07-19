@@ -18,15 +18,18 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
       .range(Number(offset), Number(offset) + Number(limit) - 1);
 
     // Role-based access
-    if (user.role === "user") {
-      query = query.eq("user_id", user.id);
-    } else if (user.role === "counselor") {
-      query = query.eq("counselor_id", user.id);
-    } else if (user.role === "developer") {
-      // Developer sees: consulting orders (to take over) + their own building orders
-      query = query.or(`developer_id.eq.${user.id},status.eq.consulting`);
+    // isSuperAdmin sees everything regardless of their current DB role
+    if (!user.isSuperAdmin) {
+      if (user.role === "user") {
+        query = query.eq("user_id", user.id);
+      } else if (user.role === "counselor") {
+        query = query.eq("counselor_id", user.id);
+      } else if (user.role === "developer") {
+        // Developer sees: consulting orders (to take over) + their own building orders
+        query = query.or(`developer_id.eq.${user.id},status.eq.consulting`);
+      }
+      // admin role sees all
     }
-    // Admin sees all
 
     if (status) {
       query = query.eq("status", String(status));

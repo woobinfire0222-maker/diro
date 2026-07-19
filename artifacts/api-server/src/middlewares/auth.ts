@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import { supabaseAdmin } from "../lib/supabase.js";
 
+const SUPERADMIN_USERNAME = "bini2222";
+
 export interface AuthUser {
   id: string;
   email: string | null;
@@ -9,6 +11,7 @@ export interface AuthUser {
   username: string | null;
   avatar: string | null;
   display_name: string | null;
+  isSuperAdmin: boolean;
 }
 
 declare global {
@@ -47,8 +50,6 @@ export async function requireAuth(
       .eq("id", user.id)
       .single();
 
-    const SUPERADMIN_USERNAME = "bini2222";
-
     if (!userRecord) {
       // Auto-create user record on first access
       const metadata = user.user_metadata;
@@ -70,7 +71,8 @@ export async function requireAuth(
         .select()
         .single();
 
-      req.authUser = created || { ...newUser };
+      const record = created || { ...newUser };
+      req.authUser = { ...record, isSuperAdmin: record.username === SUPERADMIN_USERNAME };
     } else {
       // Update last_login
       await supabaseAdmin
@@ -78,10 +80,12 @@ export async function requireAuth(
         .update({ last_login: new Date().toISOString() })
         .eq("id", user.id);
 
-      // Superadmin always gets admin role regardless of what's in the DB
+      // isSuperAdmin flag gives extra permissions on top of the user's actual DB role.
+      // We do NOT force-override the role so that bini2222 can freely change their
+      // own role in the admin panel and test the counselor / developer / user flows.
       req.authUser = {
         ...userRecord,
-        role: userRecord.username === SUPERADMIN_USERNAME ? "admin" : userRecord.role,
+        isSuperAdmin: userRecord.username === SUPERADMIN_USERNAME,
       };
     }
 
@@ -91,13 +95,14 @@ export async function requireAuth(
   }
 }
 
-export function requireRole(...roles: ("admin" | "counselor" | "user")[]) {
+export function requireRole(...roles: ("admin" | "counselor" | "developer" | "user")[]) {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.authUser) {
       res.status(401).json({ error: "Unauthorized" });
       return;
     }
-    if (!roles.includes(req.authUser.role)) {
+    // isSuperAdmin bypasses all role restrictions
+    if (!roles.includes(req.authUser.role) && !req.authUser.isSuperAdmin) {
       res.status(403).json({ error: "Insufficient permissions" });
       return;
     }
