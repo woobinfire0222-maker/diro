@@ -27,13 +27,12 @@ Workflows (managed by Replit):
 
 ## Required secrets
 
-| Secret | Used by |
-|---|---|
-| `VITE_SUPABASE_URL` | Frontend |
-| `VITE_SUPABASE_ANON_KEY` | Frontend |
-| `SUPABASE_URL` | API Server |
-| `SUPABASE_ANON_KEY` | API Server |
-| `SUPABASE_SERVICE_ROLE_KEY` | API Server |
-| `DISCORD_BOT_TOKEN` | API Server (discord.js bot) |
+| Secret | Used by | Notes |
+|---|---|---|
+| `SUPABASE_URL` | API Server + Frontend | Vite maps this to `VITE_SUPABASE_URL` automatically |
+| `SUPABASE_ANON_KEY` | API Server + Frontend | Vite maps this to `VITE_SUPABASE_ANON_KEY` automatically |
+| `SUPABASE_SERVICE_ROLE_KEY` | API Server | Admin-level DB access |
+| `DISCORD_BOT_TOKEN` | API Server | discord.js bot |
+| `SESSION_SECRET` | API Server | Express session signing |
 
 ## User preferences
