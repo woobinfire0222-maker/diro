@@ -1,0 +1,269 @@
+# 디스코드 서버에서 설정/추가 가능한 기능 전체 목록
+
+## 서버
+- 서버 이름
+- 서버 아이콘
+- 서버 배너
+- 서버 스플래시
+- 초대 스플래시
+- 서버 설명
+- 서버 언어
+- 서버 소유권 이전
+- 서버 삭제
+- 서버 공개 여부
+- 커뮤니티 활성화
+- 디스커버리 등록
+- 서버 인증 레벨
+- 미디어 콘텐츠 필터
+- 2단계 인증 요구
+- DM 기본 설정
+
+## 역할(Role)
+- 역할 생성
+- 역할 삭제
+- 역할 이름
+- 역할 색상
+- 역할 아이콘
+- 역할 이모지
+- 역할 표시 여부
+- 역할 멘션 가능 여부
+- 역할 순서 변경
+- 역할 권한
+- 역할 지급
+- 역할 제거
+
+### 역할 권한
+- Administrator
+- View Channels
+- Manage Channels
+- Manage Roles
+- Create Expressions
+- Manage Expressions
+- View Audit Log
+- Manage Webhooks
+- Manage Server
+- Create Invite
+- Change Nickname
+- Manage Nicknames
+- Kick Members
+- Ban Members
+- Timeout Members
+- Moderate Members
+- Mention @everyone/@here
+- Manage Events
+- View Server Insights
+
+### 텍스트 권한
+- Send Messages
+- Send Messages in Threads
+- Create Public Threads
+- Create Private Threads
+- Manage Threads
+- Embed Links
+- Attach Files
+- Add Reactions
+- Use External Emojis
+- Use External Stickers
+- Use Application Commands
+- Send TTS Messages
+- Read Message History
+- Manage Messages
+- Pin Messages
+- Create Polls
+
+### 음성 권한
+- Connect
+- Speak
+- Video
+- Use Voice Activity
+- Priority Speaker
+- Stream
+- Mute Members
+- Deafen Members
+- Move Members
+- Request to Speak
+- Set Voice Channel Status
+- Use Soundboard
+- Use External Sounds
+
+## 카테고리
+- 생성
+- 삭제
+- 이름 변경
+- 순서 변경
+- 권한 설정
+
+## 채널
+
+### 텍스트 채널
+- 생성
+- 삭제
+- 이름
+- 주제
+- NSFW
+- 슬로우 모드
+- 권한
+- 웹훅
+- 기본 알림
+
+### 음성 채널
+- 생성
+- 삭제
+- 이름
+- 비트레이트
+- 사용자 제한
+- 권한
+- 활동(Activity)
+
+### 스테이지 채널
+- 생성
+- 삭제
+- 발표자
+- 청중
+- 권한
+
+### 포럼 채널
+- 생성
+- 삭제
+- 태그
+- 게시물 레이아웃
+- 기본 반응
+- 가이드라인
+- 정렬 방식
+
+### 미디어 채널
+- 생성
+- 삭제
+- 이미지 게시 전용
+- 태그
+- 권한
+
+## 채널 권한
+- 역할별 권한
+- 사용자별 권한
+- 허용
+- 거부
+- 상속
+
+## 이모지
+- 업로드
+- 삭제
+- 이름 변경
+- 역할 제한
+- 애니메이션 이모지
+
+## 스티커
+- 업로드
+- 삭제
+- 이름
+- 설명
+- 태그
+
+## 사운드보드
+- 사운드 추가
+- 삭제
+- 이름
+- 볼륨
+- 역할 제한
+
+## 초대 링크
+- 생성
+- 삭제
+- 만료 시간
+- 최대 사용 횟수
+- 임시 멤버
+
+## AutoMod
+- 욕설 필터
+- 스팸 필터
+- 멘션 스팸
+- 링크 차단
+- 금칙어
+- 사용자 지정 규칙
+- 자동 경고
+- 자동 차단
+
+## 환영 화면
+- 제목
+- 설명
+- 추천 채널
+
+## 멤버
+- 초대
+- 킥
+- 차단
+- 타임아웃
+- 역할 지급
+- 별명 변경
+- 프로필 보기
+
+## 이벤트
+- 생성
+- 수정
+- 삭제
+- 음성 이벤트
+- 스테이지 이벤트
+- 외부 이벤트
+
+## 웹훅(Webhook)
+- 생성
+- 수정
+- 삭제
+- 아바타
+- 이름
+
+## 연동(Integrations)
+- 봇 추가
+- 앱 추가
+- Twitch
+- YouTube
+- Patreon
+- GitHub
+- 기타 외부 서비스
+
+## 앱(Apps)
+- 설치
+- 권한 설정
+- 명령어
+- 제거
+
+## 감사 로그(Audit Log)
+- 서버 변경
+- 역할 변경
+- 채널 변경
+- 멤버 변경
+- 메시지 삭제
+- 권한 변경
+- 웹훅 변경
+- AutoMod 기록
+- 이벤트 기록
+
+## 부스트(Server Boost)
+- 부스트 레벨
+- 서버 배너
+- 서버 배경
+- 추가 이모지
+- 더 높은 음질
+- 더 큰 업로드 용량
+- 사운드보드 슬롯 증가
+
+## 커뮤니티
+- 규칙 채널
+- 공지 채널
+- 안전 설정
+- 서버 인사이트
+- 서버 발견(Discovery)
+
+## 기타
+- 서버 위젯
+- 서버 인사이트
+- 서버 템플릿
+- 서버 백업(봇 이용)
+- Discord 봇 관리
+- Slash Command
+- Context Menu
+- Activities
+- Linked Roles
+- Onboarding
+- Membership Screening
+- Server Guide

@@ -111,14 +111,9 @@ export default function CounselorDashboard() {
       </CardContent>
       <CardFooter className="pt-0 border-t mt-auto p-4 gap-2">
         {isMine ? (
-          <>
-            <Button variant="outline" className="flex-1" onClick={() => setLocation(`/chat/${order.id}`)}>
-              <MessageSquare className="mr-2 h-4 w-4" /> 채팅
-            </Button>
-            <Button variant="default" className="flex-1 bg-[#5865F2] hover:bg-[#4752C4]" onClick={() => setLocation(`/counselor/editor/${order.id}`)}>
-              <Play className="mr-2 h-4 w-4" /> 에디터
-            </Button>
-          </>
+          <Button variant="outline" className="w-full" onClick={() => setLocation(`/chat/${order.id}`)}>
+            <MessageSquare className="mr-2 h-4 w-4" /> 채팅
+          </Button>
         ) : (
           <Button className="w-full" onClick={() => handleTakeOrder(order.id)} disabled={updateOrderMutation.isPending}>
             <CheckCircle className="mr-2 h-4 w-4" /> 내 담당으로 배정받기
@@ -161,9 +156,14 @@ export default function CounselorDashboard() {
       </CardContent>
       <CardFooter className="pt-0 border-t mt-auto p-4 gap-2">
         {isMine ? (
-          <Button variant="outline" className="w-full" onClick={() => setLocation(`/chat/${order.id}`)}>
-            <MessageSquare className="mr-2 h-4 w-4" /> 채팅 (가격 설정 가능)
-          </Button>
+          <>
+            <Button variant="outline" className="flex-1" onClick={() => setLocation(`/chat/${order.id}`)}>
+              <MessageSquare className="mr-2 h-4 w-4" /> 채팅
+            </Button>
+            <Button className="flex-1 bg-[#5865F2] hover:bg-[#4752C4] text-white" onClick={() => setLocation(`/counselor/editor/${order.id}`)}>
+              <Wrench className="mr-2 h-4 w-4" /> 에디터
+            </Button>
+          </>
         ) : (
           <Button
             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
