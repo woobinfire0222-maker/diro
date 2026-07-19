@@ -66,6 +66,9 @@ export interface UserProfile {
   role: "admin" | "counselor" | "developer" | "user";
   created_at: string;
   last_login?: string | null;
+  is_banned?: boolean | null;
+  ban_reason?: string | null;
+  banned_at?: string | null;
 }
 
 export interface AdminStats {
@@ -581,6 +584,40 @@ export function useGetAdminStats() {
         active_chats: activeChats ?? 0,
       };
     },
+  });
+}
+
+// ─── 차단/차단 해제 ──────────────────────────────────────────────────────────
+
+async function callAdminApi(path: string, body?: object) {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("Not authenticated");
+  const res = await fetch(`${import.meta.env.BASE_URL}api/admin/${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) throw new Error((await res.json()).error || "요청 실패");
+  return res.json();
+}
+
+export function useBanUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, reason }: { userId: string; reason: string }) =>
+      callAdminApi(`users/${userId}/ban`, { reason }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["adminUsers"] }),
+  });
+}
+
+export function useUnbanUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) => callAdminApi(`users/${userId}/unban`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["adminUsers"] }),
   });
 }
 

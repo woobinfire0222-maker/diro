@@ -196,7 +196,15 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-xs text-slate-400 mt-4">
-          로그인 시 DIRO 이용약관 및 개인정보처리방침에 동의합니다
+          로그인 시{" "}
+          <a href="/terms" className="underline hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+            이용약관
+          </a>
+          {" "}및{" "}
+          <a href="/privacy" className="underline hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+            개인정보처리방침
+          </a>
+          에 동의합니다
         </p>
       </motion.div>
     </div>

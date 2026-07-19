@@ -922,7 +922,7 @@ export default function ServerEditorPage() {
               </Button>
             </SheetTrigger>
             <SheetContent side="left" className="p-0 w-64 bg-[#2B2D31] border-[#1E1F22]">
-              <SidebarContent onSelect={() => setMobileSidebarOpen(false)} />
+              {SidebarContent({ onSelect: () => setMobileSidebarOpen(false) })}
             </SheetContent>
           </Sheet>
         </div>
@@ -982,12 +982,12 @@ export default function ServerEditorPage() {
 
         {/* 왼쪽 사이드바 (데스크톱) */}
         <div className="hidden lg:flex w-60 xl:w-64 shrink-0 flex-col">
-          <SidebarContent />
+          {SidebarContent({})}
         </div>
 
         {/* 오른쪽 메인 패널 */}
         <div className="flex-1 overflow-hidden">
-          <RightPanel />
+          {RightPanel()}
         </div>
       </div>
 

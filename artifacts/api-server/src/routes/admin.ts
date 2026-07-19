@@ -158,4 +158,55 @@ router.post("/announce", requireAuth, requireRole("admin"), async (req: Request,
   }
 });
 
+// ── Ban a user (superadmin only) ──────────────────────────────
+router.post("/users/:id/ban", requireAuth, requireRole("admin"), async (req: Request, res: Response) => {
+  if (!req.authUser!.isSuperAdmin) {
+    res.status(403).json({ error: "슈퍼관리자만 차단할 수 있습니다." });
+    return;
+  }
+  const { id } = req.params;
+  const { reason } = req.body as { reason?: string };
+
+  const { error } = await supabaseAdmin
+    .from("users")
+    .update({ is_banned: true, ban_reason: reason || null, banned_at: new Date().toISOString() })
+    .eq("id", id);
+
+  if (error) { res.status(500).json({ error: "차단 실패" }); return; }
+
+  await supabaseAdmin.from("notifications").insert({
+    user_id: id,
+    type: "ban",
+    title: "계정이 차단되었습니다",
+    body: reason ? `차단 사유: ${reason}` : "관리자에 의해 서비스 이용이 제한되었습니다.",
+  });
+
+  res.json({ success: true });
+});
+
+// ── Unban a user (superadmin only) ────────────────────────────
+router.post("/users/:id/unban", requireAuth, requireRole("admin"), async (req: Request, res: Response) => {
+  if (!req.authUser!.isSuperAdmin) {
+    res.status(403).json({ error: "슈퍼관리자만 차단 해제할 수 있습니다." });
+    return;
+  }
+  const { id } = req.params;
+
+  const { error } = await supabaseAdmin
+    .from("users")
+    .update({ is_banned: false, ban_reason: null, banned_at: null })
+    .eq("id", id);
+
+  if (error) { res.status(500).json({ error: "차단 해제 실패" }); return; }
+
+  await supabaseAdmin.from("notifications").insert({
+    user_id: id,
+    type: "unban",
+    title: "계정 차단이 해제되었습니다",
+    body: "계정 차단이 해제되어 DIRO 서비스를 정상적으로 이용하실 수 있습니다.",
+  });
+
+  res.json({ success: true });
+});
+
 export default router;

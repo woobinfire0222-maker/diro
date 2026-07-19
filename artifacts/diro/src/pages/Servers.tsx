@@ -1,6 +1,6 @@
 import { useLocation } from "wouter";
-import { Server, Settings, ExternalLink, Play } from "lucide-react";
-import { useGetOrders } from "@/lib/db";
+import { Server, ExternalLink } from "lucide-react";
+import { useGetOrders, useGetMe } from "@/lib/db";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -9,9 +9,12 @@ import { OrderStatusBadge } from "@/components/shared/OrderStatusBadge";
 export default function ServersPage() {
   const [, setLocation] = useLocation();
   const { data: orders, isLoading } = useGetOrders();
+  const { data: me } = useGetMe();
 
-  // Only show building and completed servers here
-  const activeServers = orders?.filter(o => ['building', 'completed'].includes(o.status)) || [];
+  // 내가 신청한 서버만 표시 (상담사가 담당하는 서버 제외)
+  const activeServers = orders?.filter(o =>
+    ["building", "completed"].includes(o.status) && o.user_id === me?.id
+  ) || [];
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -45,7 +48,7 @@ export default function ServersPage() {
                   {server.server_name.charAt(0)}
                 </div>
               </div>
-              
+
               <CardHeader className="relative pt-6">
                 <div className="absolute -top-4 right-4 bg-background rounded-full p-1 shadow-sm">
                   <OrderStatusBadge status={server.status} />
@@ -66,11 +69,15 @@ export default function ServersPage() {
                 </div>
               </CardContent>
               <CardFooter className="bg-muted/30 border-t p-4 flex gap-2">
-                <Button className="flex-1" variant={server.status === 'completed' ? 'default' : 'secondary'} disabled={server.status !== 'completed'}>
-                  <ExternalLink className="mr-2 h-4 w-4" /> 
-                  {server.status === 'completed' ? '디스코드에서 열기' : '적용 대기 중'}
+                <Button
+                  className="flex-1"
+                  variant={server.status === "completed" ? "default" : "secondary"}
+                  disabled={server.status !== "completed"}
+                >
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  {server.status === "completed" ? "디스코드에서 열기" : "적용 대기 중"}
                 </Button>
-                {server.status === 'building' && (
+                {server.status === "building" && (
                   <Button variant="outline" onClick={() => setLocation(`/chat/${server.id}`)}>
                     진행 상황 보기
                   </Button>
@@ -87,7 +94,7 @@ export default function ServersPage() {
             <p className="text-muted-foreground mb-6 max-w-md">
               주문이 접수되어 제작이 시작되면 여기에 서버가 표시됩니다.
             </p>
-            <Button onClick={() => setLocation('/orders?new=true')}>주문하기</Button>
+            <Button onClick={() => setLocation("/orders?new=true")}>주문하기</Button>
           </div>
         )}
       </div>

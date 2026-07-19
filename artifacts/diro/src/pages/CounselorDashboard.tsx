@@ -306,17 +306,17 @@ export default function CounselorDashboard() {
       {/* ── Admin: both sections ── */}
       {isAdmin ? (
         <div className="space-y-10">
-          <CounselorSection />
+          {CounselorSection()}
           <div className="border-t pt-8">
-            <DevSection />
+            {DevSection()}
           </div>
         </div>
       ) : isDeveloper ? (
         /* ── Developer only ── */
-        <DevSection />
+        DevSection()
       ) : (
         /* ── Counselor only ── */
-        <CounselorSection />
+        CounselorSection()
       )}
     </div>
   );

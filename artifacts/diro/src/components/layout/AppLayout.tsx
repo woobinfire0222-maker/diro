@@ -208,7 +208,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <SidebarContent />
+        {SidebarContent()}
       </aside>
 
       {/* Main Content */}
