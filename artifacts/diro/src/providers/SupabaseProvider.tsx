@@ -25,14 +25,20 @@ export function SupabaseProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signUp = async (email: string, password: string, username: string): Promise<{ error: string | null }> => {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { username, full_name: username } },
     });
     if (error) return { error: error.message };
-    // Auto sign-in immediately (requires "Confirm email" disabled in Supabase dashboard)
-    await supabase.auth.signInWithPassword({ email, password });
+    // If session is immediately available, email confirmation is disabled — done
+    if (data.session) return { error: null };
+    // Otherwise try signing in (handles edge cases)
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    if (signInError) {
+      // Email confirmation is still enabled in Supabase dashboard
+      return { error: '이메일 인증이 필요합니다. Supabase 대시보드 → Authentication → Providers → Email → "Confirm email" 을 끄고 다시 시도하세요.' };
+    }
     return { error: null };
   };
 
