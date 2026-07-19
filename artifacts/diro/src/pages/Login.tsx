@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { useAuth } from "@/providers/SupabaseProvider";
+import { useAuth } from "@/hooks/useAuth";
 import { motion, AnimatePresence } from "framer-motion";
 import { Eye, EyeOff, Loader2, User, Mail, Lock, ArrowRight } from "lucide-react";
 
@@ -35,7 +35,7 @@ export default function LoginPage() {
       if (!username.trim()) { setError("닉네임을 입력해주세요."); setIsLoading(false); return; }
       const { error } = await signUp(email, password, username);
       if (error) setError(error);
-      else setSuccess("가입 완료! 이메일 인증 후 로그인하세요.");
+      // auto sign-in handled in provider; if still here, signup succeeded
     }
 
     setIsLoading(false);

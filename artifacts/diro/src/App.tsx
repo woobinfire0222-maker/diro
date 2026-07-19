@@ -3,7 +3,8 @@ import { Route, Switch, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { SupabaseProvider, useAuth } from "@/providers/SupabaseProvider";
+import { SupabaseProvider } from "@/providers/SupabaseProvider";
+import { useAuth } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/providers/theme-provider";
 import { AppLayout } from "@/components/layout/AppLayout";
 
