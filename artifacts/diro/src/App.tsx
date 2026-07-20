@@ -7,7 +7,7 @@ import { SupabaseProvider } from "@/providers/SupabaseProvider";
 import { useAuth } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/providers/theme-provider";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { useGetMe } from "@/lib/db";
+import { useGetMe, useMaintenanceMode } from "@/lib/db";
 
 import LoginPage from "@/pages/Login";
 import HomePage from "@/pages/Home";
@@ -50,9 +50,33 @@ function BannedScreen({ reason }: { reason?: string | null }) {
   );
 }
 
+function MaintenanceScreen() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background p-8">
+      <div className="max-w-md w-full text-center space-y-6">
+        <div className="text-7xl">🔧</div>
+        <div>
+          <h1 className="text-2xl font-bold">서비스 점검 중입니다</h1>
+          <p className="text-muted-foreground mt-2">
+            더 나은 서비스를 위해 잠시 점검을 진행하고 있습니다.
+          </p>
+          <p className="text-sm text-muted-foreground mt-1">
+            점검이 완료되는 즉시 정상 이용이 가능합니다. 잠시만 기다려 주세요.
+          </p>
+        </div>
+        <div className="inline-flex items-center gap-2 text-xs text-muted-foreground border rounded-full px-4 py-2">
+          <span className="h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
+          점검 진행 중
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProtectedRoute({ component: Component, ...rest }: any) {
   const { session, loading } = useAuth();
   const { data: user, isLoading: userLoading } = useGetMe({ query: { enabled: !!session } });
+  const { data: maintenanceOn, isLoading: maintenanceLoading } = useMaintenanceMode();
   const [, setLocation] = useLocation();
 
   useEffect(() => {
@@ -61,7 +85,7 @@ function ProtectedRoute({ component: Component, ...rest }: any) {
     }
   }, [session, loading, setLocation]);
 
-  if (loading || (session && userLoading && !user)) {
+  if (loading || (session && userLoading && !user) || maintenanceLoading) {
     return (
       <div className="h-screen w-full flex items-center justify-center bg-background">
         <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
@@ -74,6 +98,11 @@ function ProtectedRoute({ component: Component, ...rest }: any) {
   // 차단된 유저 — 로그인은 됐지만 서비스 이용 불가
   if (user?.is_banned) {
     return <BannedScreen reason={user.ban_reason} />;
+  }
+
+  // 점검 모드 — 슈퍼관리자(bini2222) 외 접근 불가
+  if (maintenanceOn && user?.username !== "bini2222") {
+    return <MaintenanceScreen />;
   }
 
   return <Component {...rest} />;

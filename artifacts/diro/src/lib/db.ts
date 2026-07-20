@@ -771,16 +771,134 @@ export function useMarkPaymentPaid() {
 
 // ─── 공지 ─────────────────────────────────────────────────────────────────────
 
-/** 관리자: 전체 공지 발송 (edge function — service role로 모든 사용자에게 알림) */
+/** 슈퍼관리자: 전체 공지 발송 (DB 직접 삽입 — edge function 불필요) */
 export function useAdminAnnounce() {
   return useMutation({
     mutationFn: async ({ title, content }: { title: string; content: string }) => {
-      const { data, error } = await supabase.functions.invoke("admin-announce", {
-        body: { title, content },
-      });
-      if (error) throw new Error(error.message || "공지 발송 실패");
-      if (data?.error) throw new Error(data.error);
-      return data as { success: boolean; notified: number; announcement_id: string };
+      // 1. announcements 테이블에 삽입
+      const { data: ann, error: annErr } = await supabase
+        .from("announcements")
+        .insert({ title: title.trim(), content: content.trim() })
+        .select("id")
+        .single();
+      if (annErr) throw new Error(annErr.message);
+
+      // 2. 비차단 사용자 전체 조회
+      const { data: allUsers, error: usersErr } = await supabase
+        .from("users")
+        .select("id")
+        .eq("is_banned", false);
+      if (usersErr) throw new Error(usersErr.message);
+
+      if (!allUsers?.length) {
+        return { success: true, notified: 0, announcement_id: ann.id };
+      }
+
+      // 3. 모든 사용자에게 알림 삽입 (admin INSERT 권한 보유)
+      const notifications = allUsers.map((u: { id: string }) => ({
+        user_id: u.id,
+        type: "announcement" as const,
+        title: `📢 공지: ${title.trim()}`,
+        body: content.trim().slice(0, 200),
+        reference_id: ann.id,
+      }));
+      const { error: notifErr } = await supabase.from("notifications").insert(notifications);
+      if (notifErr) console.error("알림 삽입 오류:", notifErr.message);
+
+      return { success: true, notified: allUsers.length, announcement_id: ann.id };
+    },
+  });
+}
+
+// ─── 점검 모드 ──────────────────────────────────────────────────────────────
+
+export function useMaintenanceMode() {
+  return useQuery<boolean>({
+    queryKey: ["maintenanceMode"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("site_settings")
+        .select("value")
+        .eq("key", "maintenance_mode")
+        .maybeSingle();
+      return (data?.value as boolean) ?? false;
+    },
+    refetchInterval: 30_000,
+    staleTime: 10_000,
+  });
+}
+
+export function useToggleMaintenanceMode() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const { error } = await supabase
+        .from("site_settings")
+        .upsert({ key: "maintenance_mode", value: enabled, updated_at: new Date().toISOString() });
+      if (error) throw new Error(error.message);
+      return enabled;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["maintenanceMode"] }),
+  });
+}
+
+export interface SiteCheckResult {
+  name: string;
+  ok: boolean;
+  detail: string;
+}
+
+export function useRunSiteCheck() {
+  return useMutation({
+    mutationFn: async (): Promise<{ allOk: boolean; checks: SiteCheckResult[] }> => {
+      const checks: SiteCheckResult[] = [];
+
+      const run = async (name: string, fn: () => Promise<void>) => {
+        try {
+          await fn();
+          checks.push({ name, ok: true, detail: "정상" });
+        } catch (e) {
+          checks.push({ name, ok: false, detail: e instanceof Error ? e.message : String(e) });
+        }
+      };
+
+      await Promise.all([
+        run("DB 연결 (users)", async () => {
+          const { error } = await supabase.from("users").select("id", { count: "exact", head: true });
+          if (error) throw new Error(error.message);
+        }),
+        run("주문 테이블", async () => {
+          const { error } = await supabase.from("orders").select("id", { count: "exact", head: true });
+          if (error) throw new Error(error.message);
+        }),
+        run("채팅 테이블", async () => {
+          const { error } = await supabase.from("order_messages").select("id", { count: "exact", head: true });
+          if (error) throw new Error(error.message);
+        }),
+        run("알림 테이블", async () => {
+          const { error } = await supabase.from("notifications").select("id", { count: "exact", head: true });
+          if (error) throw new Error(error.message);
+        }),
+        run("공지 테이블", async () => {
+          const { error } = await supabase.from("announcements").select("id", { count: "exact", head: true });
+          if (error) throw new Error(error.message);
+        }),
+        run("사이트 설정 테이블", async () => {
+          const { data, error } = await supabase
+            .from("site_settings")
+            .select("key")
+            .eq("key", "maintenance_mode")
+            .maybeSingle();
+          if (error) throw new Error(error.message);
+          if (!data) throw new Error("maintenance_mode 행 없음 — SQL 재실행 필요");
+        }),
+        run("인증 서비스", async () => {
+          const { error } = await supabase.auth.getSession();
+          if (error) throw new Error(error.message);
+        }),
+      ]);
+
+      return { allOk: checks.every(c => c.ok), checks };
     },
   });
 }

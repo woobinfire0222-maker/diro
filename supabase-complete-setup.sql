@@ -460,13 +460,38 @@ CREATE POLICY "payments_update" ON public.payment_requests FOR UPDATE TO authent
   USING (is_superadmin() OR get_my_role() = 'admin');
 
 
--- announcements
+-- announcements — 슈퍼관리자만 쓸 수 있음
 DROP POLICY IF EXISTS "announcements_select" ON public.announcements;
 DROP POLICY IF EXISTS "announcements_write"  ON public.announcements;
 CREATE POLICY "announcements_select" ON public.announcements FOR SELECT TO authenticated USING (true);
 CREATE POLICY "announcements_write"  ON public.announcements FOR ALL TO authenticated
-  USING   (is_superadmin() OR get_my_role() = 'admin')
-  WITH CHECK (is_superadmin() OR get_my_role() = 'admin');
+  USING   (is_superadmin())
+  WITH CHECK (is_superadmin());
+
+
+-- ── site_settings (점검 모드 등 사이트 설정) ─────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS public.site_settings (
+  key        TEXT PRIMARY KEY,
+  value      JSONB NOT NULL DEFAULT 'null'::jsonb,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_by UUID REFERENCES public.users(id)
+);
+
+ALTER TABLE public.site_settings ENABLE ROW LEVEL SECURITY;
+
+-- 점검 모드 여부는 비로그인(anon)도 읽어야 함
+DROP POLICY IF EXISTS "site_settings_read"  ON public.site_settings;
+DROP POLICY IF EXISTS "site_settings_write" ON public.site_settings;
+CREATE POLICY "site_settings_read"  ON public.site_settings FOR SELECT USING (true);
+CREATE POLICY "site_settings_write" ON public.site_settings FOR ALL TO authenticated
+  USING   (is_superadmin())
+  WITH CHECK (is_superadmin());
+
+-- 기본값 삽입 (이미 있으면 무시)
+INSERT INTO public.site_settings (key, value)
+VALUES ('maintenance_mode', 'false'::jsonb)
+ON CONFLICT (key) DO NOTHING;
 
 
 -- ============================================================
