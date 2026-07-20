@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Home, ShoppingBag, MessageCircle, Server, Settings, Headset, Shield, ShieldAlert, LogOut, Bell, Menu, X, Check, CheckCheck } from "lucide-react";
+import { Home, ShoppingBag, MessageCircle, Server, Settings, Headset, Shield, ShieldAlert, LogOut, Bell, Megaphone, Menu, X, Check, CheckCheck } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { useGetMe, useGetNotifications, useMarkNotificationRead, useLogout, type Notification } from "@/lib/db";
+import { useGetMe, useGetNotifications, useMarkNotificationRead, useLogout, useGetAnnouncements, type Notification } from "@/lib/db";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -18,6 +18,63 @@ function timeAgo(dateStr: string) {
   const h = Math.floor(m / 60);
   if (h < 24) return `${h}시간 전`;
   return `${Math.floor(h / 24)}일 전`;
+}
+
+function AnnouncementButton({ session }: { session: boolean }) {
+  const [open, setOpen] = useState(false);
+  const { data: announcements } = useGetAnnouncements();
+
+  if (!session) return null;
+
+  const list = announcements ?? [];
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button className="relative p-2 text-muted-foreground hover:bg-secondary rounded-full transition-colors">
+          <Megaphone className="h-5 w-5" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 p-0 shadow-xl">
+        <div className="flex items-center justify-between px-4 py-3 border-b">
+          <span className="font-semibold text-sm flex items-center gap-2">
+            <Megaphone className="h-4 w-4 text-primary" />
+            공지사항
+          </span>
+          <span className="text-xs text-muted-foreground">{list.length}개</span>
+        </div>
+        <ScrollArea className="max-h-96">
+          {list.length === 0 ? (
+            <div className="py-10 text-center text-muted-foreground text-sm">
+              공지사항이 없습니다
+            </div>
+          ) : (
+            <div>
+              {list.map((a, i) => (
+                <div
+                  key={a.id}
+                  className={cn(
+                    "px-4 py-3 text-left",
+                    i !== list.length - 1 && "border-b"
+                  )}
+                >
+                  <p className="text-sm font-medium">{a.title}</p>
+                  <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap leading-relaxed">
+                    {a.content}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground/60 mt-1.5">
+                    {new Date(a.created_at).toLocaleDateString("ko-KR", {
+                      year: "numeric", month: "long", day: "numeric",
+                    })}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </ScrollArea>
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 function NotificationBell({ session }: { session: boolean }) {
@@ -260,6 +317,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-2">
+            <AnnouncementButton session={!!session} />
             <NotificationBell session={!!session} />
 
             <DropdownMenu>

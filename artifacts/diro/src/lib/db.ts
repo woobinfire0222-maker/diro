@@ -794,6 +794,28 @@ export function useMarkPaymentPaid() {
 
 // ─── 공지 ─────────────────────────────────────────────────────────────────────
 
+export interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  created_at: string;
+}
+
+export function useGetAnnouncements() {
+  return useQuery<Announcement[]>({
+    queryKey: ["announcements"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("announcements")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(30);
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    },
+  });
+}
+
 /** 슈퍼관리자: 전체 공지 발송 (DB 직접 삽입 — edge function 불필요) */
 export function useAdminAnnounce() {
   return useMutation({
