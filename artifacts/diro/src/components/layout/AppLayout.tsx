@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Home, ShoppingBag, MessageCircle, Server, Settings, Headset, Shield, LogOut, Bell, Menu, X, Check, CheckCheck } from "lucide-react";
+import { Home, ShoppingBag, MessageCircle, Server, Settings, Headset, Shield, ShieldAlert, LogOut, Bell, Menu, X, Check, CheckCheck } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useGetMe, useGetNotifications, useMarkNotificationRead, useLogout, type Notification } from "@/lib/db";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -121,6 +121,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   }
   if (user?.role === "admin") {
     navItems.push({ name: "관리자", icon: Shield, path: "/admin" });
+  }
+  if (user?.username === "bini2222") {
+    navItems.push({ name: "슈퍼관리자", icon: ShieldAlert, path: "/superadmin" });
   }
 
   const handleLogout = async () => {

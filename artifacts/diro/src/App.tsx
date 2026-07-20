@@ -17,6 +17,7 @@ import ServersPage from "@/pages/Servers";
 import CounselorDashboard from "@/pages/CounselorDashboard";
 import ServerEditorPage from "@/pages/ServerEditor";
 import AdminDashboard from "@/pages/AdminDashboard";
+import SuperAdminDashboard from "@/pages/SuperAdminDashboard";
 import SettingsPage from "@/pages/Settings";
 import TermsPage from "@/pages/Terms";
 import PrivacyPolicyPage from "@/pages/PrivacyPolicy";
@@ -139,6 +140,10 @@ function Routes() {
 
       <Route path="/admin">
         <AppLayout><ProtectedRoute component={AdminDashboard} /></AppLayout>
+      </Route>
+
+      <Route path="/superadmin">
+        <AppLayout><ProtectedRoute component={SuperAdminDashboard} /></AppLayout>
       </Route>
 
       <Route path="/chat">
