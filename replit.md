@@ -1,65 +1,50 @@
 # DIRO (디로)
 
-Discord 서버 맞춤 제작 플랫폼.
+A premium Discord server customization platform. Users log in, request a custom Discord server, chat with a counselor in real time, and the counselor builds it using a Discord-like in-app editor — then deploys it to the real server via a Discord bot.
 
-## 프로젝트 구조
+## Stack
 
-```
-artifacts/diro/        - React + Vite 프론트엔드 (Replit & GitHub Pages 배포)
-artifacts/api-server/  - Express API 서버 (현재 미사용 — 프론트엔드는 Supabase 직접 호출)
-lib/db/                - Drizzle ORM 스키마
-lib/api-spec/          - OpenAPI 스펙
-lib/api-client-react/  - 생성된 API 클라이언트 (현재 미사용)
-lib/api-zod/           - 생성된 Zod 유효성 검사기
-bot.ts                 - Discord 봇 (별도 실행, Replit에서 구동하지 않음)
-```
+| Layer | Tech |
+|-------|------|
+| Frontend | React 19 + Vite + Tailwind CSS v4 + shadcn/ui (`artifacts/diro`) |
+| API Server | Express 5 + Pino logging (`artifacts/api-server`) |
+| Discord Bot | discord.js v14 (runs inside the API server) |
+| Database / Auth | Supabase (PostgreSQL + Auth) |
+| API Contract | OpenAPI spec → Orval-generated Zod validators + React Query hooks (`lib/`) |
 
-## Replit 실행
+## Running on Replit
 
-프론트엔드만 실행합니다:
-- **Workflow**: `artifacts/diro: web` → `pnpm --filter @workspace/diro run dev`
+Two workflows run this project:
 
-## 필요한 환경 변수 (Secrets)
+- **`artifacts/diro: web`** — Vite dev server for the React frontend (preview path: `/`)
+- **`artifacts/api-server: API Server`** — Express API + Discord bot (preview path: `/api`)
 
-| 변수 | 용도 |
-|------|------|
-| `SUPABASE_URL` | Supabase 프로젝트 URL |
-| `SUPABASE_ANON_KEY` | Supabase anon 공개 키 |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase 서비스 역할 키 (봇 전용) |
-| `DISCORD_BOT_TOKEN` | Discord 봇 토큰 (봇 전용) |
+Both start automatically. The frontend is available at the root preview URL.
 
-## Discord 봇 별도 실행
+## Required Secrets
 
-`bot.ts`는 Realtime으로 `orders.status = 'applying'` 이벤트를 감지하여 Discord 서버를 구성합니다.
+| Secret | Where to get it |
+|--------|----------------|
+| `SUPABASE_URL` | Supabase project → Settings → API |
+| `SUPABASE_ANON_KEY` | Supabase project → Settings → API |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase project → Settings → API (keep secret) |
+| `DISCORD_BOT_TOKEN` | Discord Developer Portal → Your App → Bot |
 
-```bash
-# 별도 Node.js 환경에서 실행
-npm install discord.js @supabase/supabase-js dotenv
-npm install -D tsx typescript @types/node
-
-DISCORD_BOT_TOKEN=... SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... npx tsx bot.ts
-```
-
-## 주문 상태 흐름
+## Project Structure
 
 ```
-pending → consulting → transferred → building → payment_pending → completed
-                    ↑ 상담사 "넘기기"  ↑ 개발자 "이어받기"
+artifacts/
+  diro/          # React frontend
+  api-server/    # Express API + Discord bot
+  mockup-sandbox/# Canvas/design preview server
+lib/
+  api-spec/      # OpenAPI spec (openapi.yaml)
+  api-zod/       # Generated Zod validators
+  api-client-react/ # Generated React Query hooks
+  db/            # Drizzle ORM schema + client
+bot.ts           # Standalone Discord bot script (alternative entry)
 ```
 
-## GitHub Pages 배포
+## User Preferences
 
-`artifacts/diro`를 빌드하여 정적 사이트로 배포합니다.
-모든 API는 Supabase 클라이언트를 직접 호출합니다 (별도 서버 불필요).
-
-```bash
-BASE_PATH=/diro/ SUPABASE_URL=... SUPABASE_ANON_KEY=... pnpm --filter @workspace/diro run build
-```
-
-## 주요 변경 이력
-
-- 상담사 "개발자에게 넘기기" 버튼 추가 (status: transferred)
-- 개발자 "이어받기" 목록 = transferred 상태만 표시
-- 내 서버 목록 = completed 상태만 표시
-- bot.ts: ServerEditor 중첩 채널 형식 파싱 수정 (Discord 적용 버그 수정)
-- bot.ts: 적용 시 기존 채널·역할 전부 삭제 후 새로 생성
+- Keep the existing pnpm monorepo structure and stack — do not migrate or restructure.
