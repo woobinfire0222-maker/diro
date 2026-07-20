@@ -108,6 +108,26 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
+  // 차단된 유저 — 사이드바 없이 차단 화면만 표시
+  if (user?.is_banned) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-8">
+        <div className="max-w-md w-full text-center space-y-5">
+          <div className="text-6xl">🚫</div>
+          <h1 className="text-2xl font-bold text-destructive">계정이 차단되었습니다</h1>
+          <p className="text-muted-foreground">
+            {user.ban_reason
+              ? `차단 사유: ${user.ban_reason}`
+              : "관리자에 의해 서비스 이용이 제한되었습니다."}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            문의가 있으시면 운영자에게 연락해주세요.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const navItems = [
     { name: "홈", icon: Home, path: "/home" },
     { name: "주문", icon: ShoppingBag, path: "/orders" },
