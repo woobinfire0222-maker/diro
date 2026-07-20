@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
-import { Send, Image as ImageIcon, Paperclip, Loader2, Info, MessageCircle, DollarSign, X, CheckCircle2 } from "lucide-react";
+import { Send, Image as ImageIcon, Paperclip, Loader2, Info, MessageCircle, DollarSign, X, CheckCircle2, ChevronDown, ChevronUp, Hash, Volume2, FolderOpen, Users, ShieldCheck, Sparkles, Wallet, StickyNote, Wind } from "lucide-react";
 import { useGetOrders, useListMessages, useSendMessage, useGetMe, useRequestPaymentApproval, Message, Order } from "@/lib/db";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,74 @@ import { supabase } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 
 type ExtendedOrder = Order & { developer_id?: string | null };
+
+// ─── 신청 내용 패널 ───────────────────────────────────────────────────────────
+
+function OrderInfoPanel({ order }: { order: ExtendedOrder }) {
+  const [open, setOpen] = useState(false);
+
+  const rows: { icon: React.ReactNode; label: string; value: string | number | null | undefined }[] = [
+    { icon: <Wind className="h-3.5 w-3.5" />,       label: "분위기·컨셉",   value: order.atmosphere },
+    { icon: <FolderOpen className="h-3.5 w-3.5" />, label: "카테고리 수",   value: order.category_count != null ? `${order.category_count}개` : null },
+    { icon: <Hash className="h-3.5 w-3.5" />,       label: "텍스트 채널",  value: order.text_channel_count != null ? `${order.text_channel_count}개` : null },
+    { icon: <Volume2 className="h-3.5 w-3.5" />,    label: "음성 채널",    value: order.voice_channel_count != null ? `${order.voice_channel_count}개` : null },
+    { icon: <Users className="h-3.5 w-3.5" />,      label: "원하는 역할",  value: order.desired_roles },
+    { icon: <ShieldCheck className="h-3.5 w-3.5" />,label: "원하는 권한",  value: order.desired_permissions },
+    { icon: <Sparkles className="h-3.5 w-3.5" />,   label: "원하는 기능",  value: order.desired_features },
+    { icon: <Wallet className="h-3.5 w-3.5" />,     label: "예산",         value: order.budget ? `₩${Number(order.budget).toLocaleString()}` : null },
+    { icon: <StickyNote className="h-3.5 w-3.5" />, label: "추가 요청",    value: order.additional_notes },
+  ].filter(r => r.value != null && r.value !== "");
+
+  return (
+    <div className="border-b bg-card/60 backdrop-blur-sm">
+      {/* 항상 보이는 요약 헤더 */}
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center gap-3 px-5 py-3 hover:bg-secondary/40 transition-colors text-left"
+      >
+        <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+          <Info className="h-3.5 w-3.5 text-primary" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold text-foreground truncate">{order.server_name}</p>
+          {order.server_description ? (
+            <p className="text-[11px] text-muted-foreground truncate">{order.server_description}</p>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">신청 내용 보기</p>
+          )}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-[11px] text-muted-foreground">{open ? "접기" : "펼치기"}</span>
+          {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+        </div>
+      </button>
+
+      {/* 펼쳐지는 상세 내용 */}
+      {open && (
+        <div className="px-5 pb-4 space-y-3">
+          {order.server_description && (
+            <div className="p-3 rounded-lg bg-secondary/50 text-sm text-foreground leading-relaxed">
+              {order.server_description}
+            </div>
+          )}
+          {rows.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {rows.map(({ icon, label, value }) => (
+                <div key={label} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-secondary/30">
+                  <span className="mt-0.5 text-primary shrink-0">{icon}</span>
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-0.5">{label}</p>
+                    <p className="text-xs text-foreground break-words">{String(value)}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function ChatMessage({ message, isMe }: { message: Message, isMe: boolean }) {
   if (message.type === 'system') {
@@ -319,6 +387,9 @@ export default function ChatPage() {
               </Button>
             )}
           </div>
+
+          {/* 신청 내용 패널 */}
+          {selectedOrder && <OrderInfoPanel order={selectedOrder} />}
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-[#F8F9FB] dark:bg-[#2B2D31]/30">
