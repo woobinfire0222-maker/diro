@@ -177,7 +177,7 @@ DROP POLICY IF EXISTS "orders_delete" ON public.orders;
 CREATE POLICY "orders_select" ON public.orders FOR SELECT TO authenticated USING (
   is_superadmin() OR get_my_role() = 'admin'
   OR (get_my_role() = 'counselor'  AND (counselor_id = auth.uid() OR status = 'pending'))
-  OR (get_my_role() = 'developer'  AND (developer_id = auth.uid() OR status = 'consulting'))
+  OR (get_my_role() = 'developer'  AND (developer_id = auth.uid() OR status = 'transferred'))
   OR (get_my_role() = 'user'       AND user_id = auth.uid())
 );
 CREATE POLICY "orders_insert" ON public.orders FOR INSERT TO authenticated
@@ -208,7 +208,7 @@ CREATE POLICY "messages_select" ON public.order_messages FOR SELECT TO authentic
   is_superadmin() OR get_my_role() = 'admin'
   OR EXISTS (SELECT 1 FROM public.orders o WHERE o.id = order_id
     AND (o.user_id = auth.uid() OR o.counselor_id = auth.uid() OR o.developer_id = auth.uid()
-         OR (get_my_role() = 'developer' AND o.status = 'consulting')))
+         OR (get_my_role() = 'developer' AND o.status = 'transferred')))
 );
 CREATE POLICY "messages_insert" ON public.order_messages FOR INSERT TO authenticated WITH CHECK (
   sender_id = auth.uid() AND (

@@ -11,9 +11,9 @@ export default function ServersPage() {
   const { data: orders, isLoading } = useGetOrders();
   const { data: me } = useGetMe();
 
-  // 내가 신청한 서버만 표시 (상담사가 담당하는 서버 제외)
+  // 내가 신청해서 완성된 서버만 표시
   const activeServers = orders?.filter(o =>
-    ["building", "completed"].includes(o.status) && o.user_id === me?.id
+    o.status === "completed" && o.user_id === me?.id
   ) || [];
 
   return (

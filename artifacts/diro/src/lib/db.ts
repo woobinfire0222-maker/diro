@@ -9,7 +9,7 @@ import { supabase } from "./supabase";
 // ─── 타입 ────────────────────────────────────────────────────────────────────
 
 export type OrderStatus =
-  | "pending" | "consulting" | "building"
+  | "pending" | "consulting" | "transferred" | "building"
   | "payment_pending" | "completed" | "cancelled";
 
 export interface Order {

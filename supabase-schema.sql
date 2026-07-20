@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS public.orders (
   counselor_id         UUID REFERENCES public.users(id),
   developer_id         UUID REFERENCES public.users(id),
   status               TEXT NOT NULL DEFAULT 'pending'
-                         CHECK (status IN ('pending','consulting','building','payment_pending','completed','cancelled')),
+                         CHECK (status IN ('pending','consulting','transferred','building','payment_pending','completed','cancelled','applying','failed')),
   server_name          TEXT NOT NULL,
   server_description   TEXT,
   atmosphere           TEXT NOT NULL,
@@ -332,7 +332,7 @@ CREATE POLICY "orders_select" ON public.orders
     is_superadmin()
     OR get_my_role() = 'admin'
     OR (get_my_role() = 'counselor' AND (counselor_id = auth.uid() OR status = 'pending'))
-    OR (get_my_role() = 'developer' AND (developer_id = auth.uid() OR status = 'consulting'))
+    OR (get_my_role() = 'developer' AND (developer_id = auth.uid() OR status = 'transferred'))
     OR (get_my_role() = 'user'      AND user_id = auth.uid())
   );
 
@@ -374,7 +374,7 @@ CREATE POLICY "messages_select" ON public.order_messages
         o.user_id = auth.uid()
         OR o.counselor_id = auth.uid()
         OR o.developer_id = auth.uid()
-        OR (get_my_role() = 'developer' AND o.status = 'consulting')
+        OR (get_my_role() = 'developer' AND o.status = 'transferred')
       )
     )
   );

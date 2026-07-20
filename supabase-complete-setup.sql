@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS public.orders (
   counselor_id         UUID REFERENCES public.users(id),
   developer_id         UUID REFERENCES public.users(id),
   status               TEXT NOT NULL DEFAULT 'pending'
-                         CHECK (status IN ('pending','consulting','building','payment_pending','completed','cancelled','applying','failed')),
+                         CHECK (status IN ('pending','consulting','transferred','building','payment_pending','completed','cancelled','applying','failed')),
   server_name          TEXT NOT NULL,
   server_description   TEXT,
   atmosphere           TEXT NOT NULL,
@@ -384,9 +384,9 @@ DROP POLICY IF EXISTS "orders_update" ON public.orders;
 DROP POLICY IF EXISTS "orders_delete" ON public.orders;
 
 CREATE POLICY "orders_select" ON public.orders FOR SELECT TO authenticated USING (
-  is_superadmin() OR get_my_role() = 'admin'
+    is_superadmin() OR get_my_role() = 'admin'
   OR (get_my_role() = 'counselor'  AND (counselor_id = auth.uid() OR status = 'pending'))
-  OR (get_my_role() = 'developer'  AND (developer_id = auth.uid() OR status = 'consulting'))
+  OR (get_my_role() = 'developer'  AND (developer_id = auth.uid() OR status = 'transferred'))
   OR (get_my_role() = 'user'       AND user_id = auth.uid())
 );
 CREATE POLICY "orders_insert" ON public.orders FOR INSERT TO authenticated
@@ -426,7 +426,7 @@ CREATE POLICY "messages_select" ON public.order_messages FOR SELECT TO authentic
   is_superadmin() OR get_my_role() = 'admin'
   OR EXISTS (SELECT 1 FROM public.orders o WHERE o.id = order_id
     AND (o.user_id = auth.uid() OR o.counselor_id = auth.uid() OR o.developer_id = auth.uid()
-         OR (get_my_role() = 'developer' AND o.status = 'consulting')))
+         OR (get_my_role() = 'developer' AND o.status = 'transferred')))
 );
 CREATE POLICY "messages_insert" ON public.order_messages FOR INSERT TO authenticated WITH CHECK (
   sender_id = auth.uid() AND (

@@ -1,12 +1,12 @@
 /**
  * DIRO Discord Bot
- * 
+ *
  * 실행:
- *   DISCORD_BOT_TOKEN=... SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... npx ts-node bot.ts
+ *   DISCORD_BOT_TOKEN=... SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... npx tsx bot.ts
  *
  * 필요 패키지:
  *   npm install discord.js @supabase/supabase-js dotenv
- *   npm install -D ts-node typescript @types/node
+ *   npm install -D tsx typescript @types/node
  */
 
 import "dotenv/config";
@@ -69,17 +69,137 @@ client.on("guildDelete", async (guild) => {
   await removeGuild(guild.id);
 });
 
-// ── 서버 초기화 (기존 내용 전체 삭제) ───────────────────────────────────────
+// ── 채널 타입 매핑 ────────────────────────────────────────────────────────────
 
 const CHANNEL_TYPE: Record<string, number> = {
   text:         0,
   voice:        2,
   announcement: 5,
+  stage:        13,
   forum:        15,
+  media:        16,
 };
 
-/** 지정 서버의 기존 채널·역할을 전부 삭제한 뒤 config대로 재생성 */
-async function applyConfig(serverId: string, config: any) {
+// ── ServerEditor config 형식 파싱 ─────────────────────────────────────────────
+//
+// ServerEditor는 채널을 카테고리 안에 중첩해서 저장합니다:
+//   config.categories[].channels[]
+//
+// bot이 필요한 형식:
+//   flat categories  → config.categories (channels 없는 메타만)
+//   flat channels    → category_id 참조 포함
+//
+// 이 함수가 두 형식 모두 처리합니다.
+
+interface NormalizedConfig {
+  server: {
+    name:               string;
+    description:        string | null;
+    verification_level: number;
+  };
+  roles: Array<{
+    id:          string;
+    name:        string;
+    color:       string;
+    hoist:       boolean;
+    mentionable: boolean;
+  }>;
+  categories: Array<{
+    id:       string;
+    name:     string;
+    position: number;
+  }>;
+  channels: Array<{
+    id:          string;
+    name:        string;
+    type:        string;
+    category_id: string | null;
+    position:    number;
+    topic:       string | null;
+    nsfw:        boolean;
+    slow_mode:   number;
+  }>;
+}
+
+function normalizeConfig(raw: any): NormalizedConfig {
+  // server info ─ ServerEditor uses serverName / serverDescription
+  const server = {
+    name:               raw.serverName  ?? raw.server?.name  ?? "DIRO 서버",
+    description:        raw.serverDescription ?? raw.server?.description ?? null,
+    verification_level: (() => {
+      const vl = raw.verificationLevel ?? raw.server?.verification_level ?? "none";
+      const map: Record<string, number> = { none: 0, low: 1, medium: 2, high: 3, "very_high": 4 };
+      return typeof vl === "number" ? vl : (map[vl] ?? 0);
+    })(),
+  };
+
+  // roles
+  const roles = (raw.roles ?? [])
+    .filter((r: any) => r.name !== "@everyone")
+    .map((r: any) => ({
+      id:          String(r.id),
+      name:        r.name,
+      color:       r.color ?? "#000000",
+      hoist:       r.hoist       ?? false,
+      mentionable: r.mentionable ?? false,
+    }));
+
+  // categories + channels ─ handle both nested and flat formats
+  const categories: NormalizedConfig["categories"] = [];
+  const channels:   NormalizedConfig["channels"]   = [];
+
+  if (Array.isArray(raw.categories)) {
+    raw.categories.forEach((cat: any, catIdx: number) => {
+      categories.push({
+        id:       String(cat.id),
+        name:     cat.name,
+        position: cat.position ?? catIdx,
+      });
+
+      // nested channels inside each category (ServerEditor format)
+      if (Array.isArray(cat.channels)) {
+        cat.channels.forEach((ch: any, chIdx: number) => {
+          channels.push({
+            id:          String(ch.id),
+            name:        ch.name,
+            type:        ch.type ?? "text",
+            category_id: String(cat.id),
+            position:    ch.position ?? chIdx,
+            topic:       ch.topic    ?? null,
+            nsfw:        ch.nsfw     ?? false,
+            slow_mode:   ch.slowmode ?? ch.slow_mode ?? 0,
+          });
+        });
+      }
+    });
+  }
+
+  // flat channels at top level (older format or channels outside categories)
+  if (Array.isArray(raw.channels)) {
+    raw.channels.forEach((ch: any, chIdx: number) => {
+      // avoid duplicates already added from nested
+      if (!channels.find((c) => c.id === String(ch.id))) {
+        channels.push({
+          id:          String(ch.id),
+          name:        ch.name,
+          type:        ch.type ?? "text",
+          category_id: ch.category_id ? String(ch.category_id) : null,
+          position:    ch.position ?? chIdx,
+          topic:       ch.topic    ?? null,
+          nsfw:        ch.nsfw     ?? false,
+          slow_mode:   ch.slowmode ?? ch.slow_mode ?? 0,
+        });
+      }
+    });
+  }
+
+  return { server, roles, categories, channels };
+}
+
+// ── 서버 초기화 후 재생성 ────────────────────────────────────────────────────
+
+async function applyConfig(serverId: string, rawConfig: any) {
+  const config  = normalizeConfig(rawConfig);
   const applied: string[] = [];
   const errors:  string[] = [];
 
@@ -90,12 +210,12 @@ async function applyConfig(serverId: string, config: any) {
   try {
     await rest.patch(Routes.guild(serverId), {
       body: {
-        name:               config.server?.name        ?? undefined,
-        description:        config.server?.description ?? null,
-        verification_level: config.server?.verification_level ?? 0,
+        name:               config.server.name,
+        description:        config.server.description,
+        verification_level: config.server.verification_level,
       },
     });
-    log(`서버 이름: ${config.server?.name}`);
+    log(`서버 이름: ${config.server.name}`);
   } catch (e) {
     err(`서버 이름 수정 실패: ${(e as Error).message}`);
   }
@@ -115,15 +235,13 @@ async function applyConfig(serverId: string, config: any) {
     err(`채널 목록 조회 실패: ${(e as Error).message}`);
   }
 
-  // ── 3. 기존 역할 전부 삭제 (everyone · 관리봇 역할 제외) ─────────────────
+  // ── 3. 기존 역할 전부 삭제 (everyone · 봇 관리 역할 제외) ─────────────────
   try {
     const guildRoles = await rest.get(Routes.guildRoles(serverId)) as any[];
-    // 봇 자신의 역할 ID 수집 (삭제 불가)
-    const botMember = await rest.get(Routes.guildMember(serverId, client.user!.id)) as any;
+    const botMember  = await rest.get(Routes.guildMember(serverId, client.user!.id)) as any;
     const botRoleIds = new Set<string>(botMember.roles ?? []);
 
     for (const role of guildRoles) {
-      // everyone, 관리 불가 역할, 봇 역할은 스킵
       if (role.name === "@everyone" || role.managed || botRoleIds.has(role.id)) continue;
       try {
         await rest.delete(Routes.guildRole(serverId, role.id));
@@ -137,17 +255,17 @@ async function applyConfig(serverId: string, config: any) {
   }
 
   // ── 4. 역할 생성 ──────────────────────────────────────────────────────────
-  const roleMap: Record<string, string> = {}; // config role id → discord role id
+  const roleMap: Record<string, string> = {};
 
-  for (const role of (config.roles ?? []).filter((r: any) => r.name !== "@everyone")) {
+  for (const role of config.roles) {
     try {
-      const colorHex = role.color?.replace?.("#", "") ?? "000000";
-      const created = await rest.post(Routes.guildRoles(serverId), {
+      const colorHex = role.color.replace("#", "") || "000000";
+      const created  = await rest.post(Routes.guildRoles(serverId), {
         body: {
           name:        role.name,
           color:       parseInt(colorHex, 16) || 0,
-          hoist:       role.hoist       ?? false,
-          mentionable: role.mentionable ?? false,
+          hoist:       role.hoist,
+          mentionable: role.mentionable,
         },
       }) as { id: string };
       roleMap[role.id] = created.id;
@@ -158,12 +276,12 @@ async function applyConfig(serverId: string, config: any) {
   }
 
   // ── 5. 카테고리 생성 ──────────────────────────────────────────────────────
-  const catMap: Record<string, string> = {}; // config category id → discord channel id
+  const catMap: Record<string, string> = {};
 
-  for (const cat of (config.categories ?? [])) {
+  for (const cat of config.categories) {
     try {
       const created = await rest.post(Routes.guildChannels(serverId), {
-        body: { name: cat.name, type: 4, position: cat.position ?? 0 },
+        body: { name: cat.name, type: 4, position: cat.position },
       }) as { id: string };
       catMap[cat.id] = created.id;
       log(`카테고리 생성: ${cat.name}`);
@@ -173,17 +291,20 @@ async function applyConfig(serverId: string, config: any) {
   }
 
   // ── 6. 채널 생성 ──────────────────────────────────────────────────────────
-  for (const ch of (config.channels ?? [])) {
+  for (const ch of config.channels) {
     try {
+      const discordType = CHANNEL_TYPE[ch.type] ?? 0;
+      const parentId    = ch.category_id ? (catMap[ch.category_id] ?? undefined) : undefined;
+
       await rest.post(Routes.guildChannels(serverId), {
         body: {
           name:                ch.name,
-          type:                CHANNEL_TYPE[ch.type] ?? 0,
-          parent_id:           ch.category_id ? (catMap[ch.category_id] ?? undefined) : undefined,
-          position:            ch.position    ?? 0,
-          topic:               ch.topic       ?? null,
-          nsfw:                ch.nsfw        ?? false,
-          rate_limit_per_user: ch.slow_mode   ?? 0,
+          type:                discordType,
+          parent_id:           parentId,
+          position:            ch.position,
+          topic:               ch.type === "text" || ch.type === "announcement" ? (ch.topic ?? null) : undefined,
+          nsfw:                ch.nsfw,
+          rate_limit_per_user: ch.slow_mode,
         },
       });
       log(`채널 생성: ${ch.name} (${ch.type})`);
@@ -213,14 +334,14 @@ supabase
 
       if (!order.discord_server_id) {
         console.error("❌ discord_server_id 없음 — 중단");
-        await supabase.from("orders")
+        await supabase
+          .from("orders")
           .update({ status: "failed", updated_at: new Date().toISOString() })
           .eq("id", order.id);
         return;
       }
 
       try {
-        // 서버 설정 조회
         const { data: project, error: projErr } = await supabase
           .from("server_projects")
           .select("config_json")
@@ -231,39 +352,42 @@ supabase
           throw new Error(projErr?.message ?? "서버 설정 없음");
         }
 
-        const config = JSON.parse(project.config_json);
+        const rawConfig = JSON.parse(project.config_json);
+        const { applied, errors } = await applyConfig(order.discord_server_id, rawConfig);
 
-        // 기존 내용 지우고 새로 생성
-        const { applied, errors } = await applyConfig(order.discord_server_id, config);
-
-        // 결과 저장
-        await supabase.from("server_projects")
+        await supabase
+          .from("server_projects")
           .update({ apply_result_json: JSON.stringify({ applied, errors }) })
           .eq("order_id", order.id);
 
-        // 완료 처리
-        const finalStatus = errors.length === applied.length ? "failed" : "completed";
-        await supabase.from("orders")
+        // 오류가 있어도 일부라도 성공하면 completed
+        const finalStatus = errors.length > 0 && applied.length === 0 ? "failed" : "completed";
+
+        await supabase
+          .from("orders")
           .update({ status: finalStatus, updated_at: new Date().toISOString() })
           .eq("id", order.id);
 
-        console.log(`\n${finalStatus === "completed" ? "✅" : "⚠️"} 완료: ${applied.length}개 적용, ${errors.length}개 오류`);
-
-      } catch (err) {
-        console.error("❌ 적용 중 오류:", (err as Error).message);
-        await supabase.from("server_projects")
-          .update({ apply_result_json: JSON.stringify({ applied: [], errors: [(err as Error).message] }) })
-          .eq("order_id", order.id)
-          .then(() =>
-            supabase.from("orders")
-              .update({ status: "failed", updated_at: new Date().toISOString() })
-              .eq("id", order.id)
-          );
+        console.log(
+          `\n${finalStatus === "completed" ? "✅" : "⚠️"} 완료: ${applied.length}개 적용, ${errors.length}개 오류`,
+        );
+      } catch (e) {
+        console.error("❌ 적용 중 오류:", (e as Error).message);
+        await supabase
+          .from("server_projects")
+          .update({
+            apply_result_json: JSON.stringify({ applied: [], errors: [(e as Error).message] }),
+          })
+          .eq("order_id", order.id);
+        await supabase
+          .from("orders")
+          .update({ status: "failed", updated_at: new Date().toISOString() })
+          .eq("id", order.id);
       }
     },
   )
   .subscribe((status) => {
-    if (status === "SUBSCRIBED")  console.log("✅ Realtime 연결됨 — 전송 대기 중");
+    if (status === "SUBSCRIBED")   console.log("✅ Realtime 연결됨 — 전송 대기 중");
     if (status === "CHANNEL_ERROR") console.error("❌ Realtime 연결 실패");
   });
 

@@ -9,7 +9,7 @@ ALTER TABLE public.orders
 ALTER TABLE public.orders
   ADD CONSTRAINT orders_status_check
   CHECK (status IN (
-    'pending','consulting','building',
+    'pending','consulting','transferred','building',
     'payment_pending','completed','cancelled',
     'applying','failed'
   ));
