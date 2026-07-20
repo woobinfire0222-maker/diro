@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS public.orders (
   counselor_id         UUID REFERENCES public.users(id),
   developer_id         UUID REFERENCES public.users(id),
   status               TEXT NOT NULL DEFAULT 'pending'
-                         CHECK (status IN ('pending','consulting','building','payment_pending','completed','cancelled')),
+                         CHECK (status IN ('pending','consulting','building','payment_pending','completed','cancelled','applying','failed')),
   server_name          TEXT NOT NULL,
   server_description   TEXT,
   atmosphere           TEXT NOT NULL,
@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS public.orders (
   desired_roles        TEXT,
   desired_permissions  TEXT,
   desired_features     TEXT,
+  discord_server_id    TEXT,
   budget               NUMERIC NOT NULL,
   price                NUMERIC,
   additional_notes     TEXT,
@@ -67,11 +68,12 @@ CREATE TABLE IF NOT EXISTS public.orders (
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS developer_id UUID REFERENCES public.users(id) ON DELETE SET NULL;
 
 CREATE TABLE IF NOT EXISTS public.server_projects (
-  order_id      UUID PRIMARY KEY REFERENCES public.orders(id) ON DELETE CASCADE,
-  config_json   TEXT NOT NULL DEFAULT '{}',
-  history_json  TEXT NOT NULL DEFAULT '[]',
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  order_id          UUID PRIMARY KEY REFERENCES public.orders(id) ON DELETE CASCADE,
+  config_json       TEXT NOT NULL DEFAULT '{}',
+  history_json      TEXT NOT NULL DEFAULT '[]',
+  apply_result_json TEXT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- order_messages.type에 'payment' 추가 (CHECK 제약 수정)
