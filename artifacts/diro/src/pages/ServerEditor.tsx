@@ -369,13 +369,8 @@ function ApplyDialog({ open, onClose, orderId, onSaveFirst }: ApplyDialogProps) 
                 <p className="text-xs opacity-80">봇이 서버에 있습니다</p>
               </div>
             </div>
-            <div className="p-3 rounded-lg bg-yellow-500/10 text-yellow-400 text-xs space-y-1">
-              <p className="font-bold flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" /> 주의사항</p>
-              <ul className="space-y-0.5 text-yellow-400/80 list-disc list-inside">
-                <li>기존 채널·역할이 있어도 새로 추가됩니다 (덮어쓰지 않음)</li>
-                <li>서버 이름과 설명은 업데이트됩니다</li>
-                <li>되돌리려면 Discord에서 직접 삭제해야 합니다</li>
-              </ul>
+            <div className="p-3 rounded-lg bg-[#1E1F22] text-[#949BA4] text-xs">
+              <p>기존 채널과 역할을 모두 삭제하고 새로 만듭니다.</p>
             </div>
           </div>
         )}

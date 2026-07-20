@@ -1,0 +1,14 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "fO_xUytYHRfl0I3_H8iqj"
+uri = "file://bot.ts"
+type = "unspecified"
+title = "bot.ts — DIRO Discord 봇"
+
+[[outputs]]
+id = "03bLVF_SaM2x1C_CueI5X"
+uri = "file://diro_schema.sql"
+type = "unspecified"
+title = "diro_schema.sql — Supabase DB 스키마"
