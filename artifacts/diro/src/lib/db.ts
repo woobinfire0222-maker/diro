@@ -590,12 +590,24 @@ export function useBanUser() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ userId, reason }: { userId: string; reason: string }) => {
-      const { data, error } = await supabase.rpc("ban_user", {
-        target_user_id: userId,
-        ban_reason_text: reason || null,
+      // 직접 UPDATE (admin_update_users RLS 정책으로 슈퍼관리자 허용)
+      const { error } = await supabase
+        .from("users")
+        .update({ is_banned: true, ban_reason: reason || null, banned_at: new Date().toISOString() })
+        .eq("id", userId);
+      if (error) throw new Error(error.message);
+
+      // 차단 알림 발송
+      await supabase.from("notifications").insert({
+        user_id: userId,
+        type: "ban",
+        title: "계정이 차단되었습니다",
+        body: reason
+          ? `차단 사유: ${reason}`
+          : "관리자에 의해 서비스 이용이 제한되었습니다.",
       });
-      if (error) throw new Error(error.message || "차단 실패");
-      return data as { success: boolean };
+
+      return { success: true };
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["adminUsers"] }),
   });
@@ -605,11 +617,22 @@ export function useUnbanUser() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (userId: string) => {
-      const { data, error } = await supabase.rpc("unban_user", {
-        target_user_id: userId,
+      // 직접 UPDATE
+      const { error } = await supabase
+        .from("users")
+        .update({ is_banned: false, ban_reason: null, banned_at: null })
+        .eq("id", userId);
+      if (error) throw new Error(error.message);
+
+      // 차단 해제 알림
+      await supabase.from("notifications").insert({
+        user_id: userId,
+        type: "unban",
+        title: "계정 차단이 해제되었습니다",
+        body: "계정 차단이 해제되어 DIRO 서비스를 정상적으로 이용하실 수 있습니다.",
       });
-      if (error) throw new Error(error.message || "차단 해제 실패");
-      return data as { success: boolean };
+
+      return { success: true };
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["adminUsers"] }),
   });
