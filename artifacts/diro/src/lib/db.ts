@@ -488,11 +488,18 @@ export function useMarkAllNotificationsRead() {
 export function useVerifyBot() {
   return useMutation({
     mutationFn: async (serverId: string) => {
-      const { data, error } = await supabase.functions.invoke("discord-verify", {
-        body: { server_id: serverId },
-      });
-      if (error) throw new Error(error.message || "Verify failed");
-      return data as { in_server: boolean; server_name: string | null; error: string | null };
+      // 봇이 bot_guilds 테이블에 자신이 들어간 서버를 기록해 둠 — 직접 조회
+      const { data, error } = await supabase
+        .from("bot_guilds")
+        .select("guild_id, guild_name")
+        .eq("guild_id", serverId)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      return {
+        in_server:   !!data,
+        server_name: data?.guild_name ?? null,
+        error:       null,
+      };
     },
   });
 }
@@ -500,11 +507,53 @@ export function useVerifyBot() {
 export function useApplyDiscord() {
   return useMutation({
     mutationFn: async ({ orderId, serverId }: { orderId: string; serverId: string }) => {
-      const { data, error } = await supabase.functions.invoke("discord-apply", {
-        body: { order_id: orderId, server_id: serverId },
-      });
-      if (error) throw new Error(error.message || "Apply failed");
-      return data as { success: boolean; applied_items: string[]; error: string | null };
+      // 1. 주문에 서버 ID 저장 후 status = 'applying' 으로 변경 → 봇이 Realtime으로 감지
+      const { error: upErr } = await supabase
+        .from("orders")
+        .update({
+          discord_server_id: serverId,
+          status:            "applying",
+          updated_at:        new Date().toISOString(),
+        })
+        .eq("id", orderId);
+      if (upErr) throw new Error(upErr.message);
+
+      // 2. 봇이 완료(completed / failed)로 업데이트할 때까지 최대 60초 폴링
+      for (let i = 0; i < 60; i++) {
+        await new Promise((r) => setTimeout(r, 1000));
+        const { data: order } = await supabase
+          .from("orders")
+          .select("status")
+          .eq("id", orderId)
+          .single();
+
+        if (order?.status === "completed") {
+          // 봇이 server_projects.apply_result_json 에 결과를 기록
+          const { data: proj } = await supabase
+            .from("server_projects")
+            .select("apply_result_json")
+            .eq("order_id", orderId)
+            .single();
+          const result = proj?.apply_result_json
+            ? (JSON.parse(proj.apply_result_json) as { applied: string[]; errors: string[] })
+            : { applied: [], errors: [] };
+          return {
+            success:      true,
+            applied_items: result.applied ?? [],
+            error:        result.errors?.length ? result.errors.join(", ") : null,
+          };
+        }
+
+        if (order?.status === "failed") {
+          return { success: false, applied_items: [], error: "봇이 서버 설정 적용에 실패했습니다." };
+        }
+      }
+
+      return {
+        success:      false,
+        applied_items: [],
+        error:        "타임아웃: 봇이 응답하지 않습니다. 봇이 실행 중인지 확인해주세요.",
+      };
     },
   });
 }
