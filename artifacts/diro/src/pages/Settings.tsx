@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { useTheme } from "@/providers/theme-provider";
+import { useTheme } from "@/hooks/useTheme";
 import { Switch } from "@/components/ui/switch";
 import { ShieldCheck } from "lucide-react";
 
