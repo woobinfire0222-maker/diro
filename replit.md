@@ -1,50 +1,47 @@
-# DIRO (디로)
+# DIRO — Discord Server Management Platform
 
-A premium Discord server customization platform. Users log in, request a custom Discord server, chat with a counselor in real time, and the counselor builds it using a Discord-like in-app editor — then deploys it to the real server via a Discord bot.
+A premium Discord server creation/management platform ("프리미엄 Discord 서버 제작 플랫폼") built with a React + Vite frontend and an Express API backend.
 
 ## Stack
 
-| Layer | Tech |
-|-------|------|
-| Frontend | React 19 + Vite + Tailwind CSS v4 + shadcn/ui (`artifacts/diro`) |
-| API Server | Express 5 + Pino logging (`artifacts/api-server`) |
-| Discord Bot | discord.js v14 (runs inside the API server) |
-| Database / Auth | Supabase (PostgreSQL + Auth) |
-| API Contract | OpenAPI spec → Orval-generated Zod validators + React Query hooks (`lib/`) |
+| Layer | Technology |
+|---|---|
+| Frontend | React 19, Vite, Tailwind CSS, shadcn/ui, Wouter (routing), TanStack Query |
+| Backend | Express 5, Node.js 24, Pino logging, Discord.js 14 |
+| Database | Supabase (PostgreSQL) |
+| Auth | Supabase Auth (email/password) |
 
-## Running on Replit
-
-Two workflows run this project:
-
-- **`artifacts/diro: web`** — Vite dev server for the React frontend (preview path: `/`)
-- **`artifacts/api-server: API Server`** — Express API + Discord bot (preview path: `/api`)
-
-Both start automatically. The frontend is available at the root preview URL.
-
-## Required Secrets
-
-| Secret | Where to get it |
-|--------|----------------|
-| `SUPABASE_URL` | Supabase project → Settings → API |
-| `SUPABASE_ANON_KEY` | Supabase project → Settings → API |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase project → Settings → API (keep secret) |
-| `DISCORD_BOT_TOKEN` | Discord Developer Portal → Your App → Bot |
-
-## Project Structure
+## Project layout
 
 ```
 artifacts/
-  diro/          # React frontend
-  api-server/    # Express API + Discord bot
-  mockup-sandbox/# Canvas/design preview server
-lib/
-  api-spec/      # OpenAPI spec (openapi.yaml)
-  api-zod/       # Generated Zod validators
-  api-client-react/ # Generated React Query hooks
-  db/            # Drizzle ORM schema + client
-bot.ts           # Standalone Discord bot script (alternative entry)
+  diro/          — React frontend (preview path: /)
+  api-server/    — Express API server (preview path: /api)
+  mockup-sandbox/ — Canvas/design preview server
 ```
 
-## User Preferences
+## Running the project
 
-- Keep the existing pnpm monorepo structure and stack — do not migrate or restructure.
+Both services start automatically via the configured workflows:
+- **DIRO (frontend)**: `pnpm --filter @workspace/diro run dev`
+- **API Server**: `pnpm --filter @workspace/api-server run dev`
+
+## Required secrets
+
+All set in Replit Secrets:
+
+| Secret | Where to find it |
+|---|---|
+| `SUPABASE_URL` | Supabase → Project Settings → API |
+| `SUPABASE_ANON_KEY` | Supabase → Project Settings → API |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API |
+| `DISCORD_BOT_TOKEN` | Discord Developer Portal → Your App → Bot → Token |
+
+## Database schema
+
+See `diro_schema.sql` at the project root for the full Supabase schema.
+
+## User preferences
+
+- Keep the existing monorepo structure (pnpm workspace)
+- Korean-language UI is intentional

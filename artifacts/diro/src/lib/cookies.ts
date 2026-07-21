@@ -66,7 +66,7 @@ export const supabaseCookieStorage = {
   removeItem(key: string): void {
     removeCookie(key);
   },
-} satisfies Storage;
+};
 
 // ─── 설정값 헬퍼 ──────────────────────────────────────────────────────────────
 
