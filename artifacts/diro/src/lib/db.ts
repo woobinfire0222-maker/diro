@@ -724,17 +724,47 @@ export interface PaymentRequest {
   client_display_name?: string | null;
 }
 
-/** 개발자: edge function을 통해 결제 승인 요청 전송 */
+/** 개발자: API 서버를 통해 결제 승인 요청 전송 + Discord DM */
 export function useRequestPaymentApproval() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ orderId, amount }: { orderId: string; amount: number }) => {
-      const { data, error } = await supabase.functions.invoke("request-payment-approval", {
-        body: { order_id: orderId, amount },
-      });
-      if (error) throw new Error(error.message || "결제 요청 전송 실패");
-      if (data?.error) throw new Error(data.error);
-      return data as { success: boolean; payment_request_id: string; discord_notified: boolean };
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("로그인이 필요합니다.");
+
+      let res: Response;
+      try {
+        res = await fetch("/api/payments/request-approval", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ order_id: orderId, amount }),
+        });
+      } catch (networkErr) {
+        throw new Error(`네트워크 오류: API 서버에 연결할 수 없습니다. (${(networkErr as Error).message})`);
+      }
+
+      let body: Record<string, unknown> = {};
+      try {
+        body = await res.json();
+      } catch {
+        throw new Error(`서버 응답 파싱 실패 (HTTP ${res.status})`);
+      }
+
+      if (!res.ok) {
+        // 서버에서 보낸 상세 에러 메시지를 그대로 던짐
+        const detail = (body?.detail as string) || (body?.error as string) || `HTTP ${res.status}`;
+        throw new Error(detail);
+      }
+
+      return {
+        success: true,
+        payment_request_id: (body.id as string) ?? "",
+        discord_notified: (body.discord_notified as boolean) ?? false,
+        discord_error: (body.discord_error as string | null) ?? null,
+      };
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["orders"] });

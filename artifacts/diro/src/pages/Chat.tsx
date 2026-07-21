@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
-import { Send, Image as ImageIcon, Paperclip, Loader2, Info, MessageCircle, DollarSign, X, CheckCircle2, ChevronDown, ChevronUp, Hash, Volume2, FolderOpen, Users, ShieldCheck, Sparkles, Wallet, StickyNote, Wind } from "lucide-react";
+import { Send, Image as ImageIcon, Paperclip, Loader2, Info, MessageCircle, DollarSign, X, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Hash, Volume2, FolderOpen, Users, ShieldCheck, Sparkles, Wallet, StickyNote, Wind } from "lucide-react";
 import { useGetOrders, useListMessages, useSendMessage, useGetMe, useRequestPaymentApproval, Message, Order } from "@/lib/db";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -133,6 +133,8 @@ function ChatMessage({ message, isMe }: { message: Message, isMe: boolean }) {
 function DevPricePanel({ order, onClose }: { order: ExtendedOrder; onClose: () => void }) {
   const [amount, setAmount] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [discordWarning, setDiscordWarning] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const { toast } = useToast();
   const requestApproval = useRequestPaymentApproval();
 
@@ -140,31 +142,39 @@ function DevPricePanel({ order, onClose }: { order: ExtendedOrder; onClose: () =
     e.preventDefault();
     const numAmount = Number(amount.replace(/,/g, ""));
     if (!numAmount || numAmount <= 0) {
-      toast({ variant: "destructive", title: "올바른 금액을 입력해주세요." });
+      setErrorMsg("올바른 금액을 입력해주세요.");
       return;
     }
+    setErrorMsg(null);
 
     try {
       const result = await requestApproval.mutateAsync({ orderId: order.id, amount: numAmount });
       setSubmitted(true);
-      toast({
-        title: "✅ 승인 요청 전송됨",
-        description: result.discord_notified
-          ? "bini2222에게 Discord DM으로 알림이 전송되었습니다."
-          : "결제 요청이 생성되었습니다. 관리자 패널에서 확인 가능합니다.",
-      });
+
+      if (result.discord_notified) {
+        toast({ title: "✅ 전송 완료", description: "bini2222에게 Discord DM으로 승인 요청이 전송됐습니다." });
+      } else {
+        // 결제 요청은 만들어졌지만 DM이 실패한 경우
+        setDiscordWarning(result.discord_error ?? "Discord DM을 보내지 못했습니다. 관리자에게 직접 알려주세요.");
+        toast({
+          title: "⚠️ 결제 요청 생성됨 (DM 실패)",
+          description: result.discord_error ?? "Discord DM 전송에 실패했습니다.",
+        });
+      }
     } catch (e) {
-      toast({ variant: "destructive", title: "전송 실패", description: String(e) });
+      const msg = e instanceof Error ? e.message : String(e);
+      setErrorMsg(msg);
     }
   };
 
-  if (submitted) {
+  // ── 성공 + Discord DM도 성공 ─────────────────────────────────────────────
+  if (submitted && !discordWarning) {
     return (
       <div className="border-t bg-emerald-50 dark:bg-emerald-950/30 p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
             <CheckCircle2 className="h-5 w-5" />
-            <span className="font-medium text-sm">승인 요청이 전송되었습니다. bini2222의 Discord DM을 기다리세요.</span>
+            <span className="font-medium text-sm">Discord DM 전송 완료. bini2222의 승인을 기다리세요.</span>
           </div>
           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onClose}>
             <X className="h-4 w-4" />
@@ -174,8 +184,28 @@ function DevPricePanel({ order, onClose }: { order: ExtendedOrder; onClose: () =
     );
   }
 
+  // ── 성공이지만 Discord DM 실패 ───────────────────────────────────────────
+  if (submitted && discordWarning) {
+    return (
+      <div className="border-t bg-amber-50 dark:bg-amber-950/20 p-4 space-y-2">
+        <div className="flex items-start gap-2 text-amber-700 dark:text-amber-400">
+          <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
+          <span className="text-sm font-medium">결제 요청이 생성됐습니다. 관리자 패널에서 확인 가능합니다.</span>
+        </div>
+        <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2">
+          <p className="text-xs font-semibold text-destructive mb-0.5">⚠️ Discord DM 전송 실패</p>
+          <p className="text-xs text-destructive/80">{discordWarning}</p>
+        </div>
+        <div className="flex justify-end">
+          <Button variant="ghost" size="sm" onClick={onClose} className="h-7 text-xs">닫기</Button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── 입력 폼 ──────────────────────────────────────────────────────────────
   return (
-    <div className="border-t bg-amber-50 dark:bg-amber-950/20 p-4">
+    <div className="border-t bg-amber-50 dark:bg-amber-950/20 p-4 space-y-3">
       <div className="flex items-start gap-3">
         <div className="h-8 w-8 rounded-full bg-amber-100 dark:bg-amber-900 flex items-center justify-center shrink-0">
           <DollarSign className="h-4 w-4 text-amber-600" />
@@ -183,7 +213,7 @@ function DevPricePanel({ order, onClose }: { order: ExtendedOrder; onClose: () =
         <div className="flex-1">
           <p className="text-sm font-semibold mb-1">💰 가격 확정 및 승인 요청</p>
           <p className="text-xs text-muted-foreground mb-3">
-            금액을 입력하고 확인하면 bini2222에게 Discord DM으로 승인 요청이 전송됩니다.
+            금액을 확정하면 bini2222에게 Discord DM으로 승인 요청이 전송됩니다.
             승인 후 신청자 채팅에 토스 송금 버튼이 자동으로 표시됩니다.
           </p>
           <form onSubmit={handleSubmit} className="flex items-center gap-2">
@@ -193,7 +223,7 @@ function DevPricePanel({ order, onClose }: { order: ExtendedOrder; onClose: () =
                 type="text"
                 placeholder="예: 30000"
                 value={amount}
-                onChange={e => setAmount(e.target.value.replace(/[^0-9,]/g, ""))}
+                onChange={e => { setAmount(e.target.value.replace(/[^0-9,]/g, "")); setErrorMsg(null); }}
                 className="pl-7 h-9"
                 required
               />
@@ -201,17 +231,37 @@ function DevPricePanel({ order, onClose }: { order: ExtendedOrder; onClose: () =
             <Button
               type="submit"
               size="sm"
-              className="bg-amber-500 hover:bg-amber-600 text-white h-9"
+              className="bg-amber-500 hover:bg-amber-600 text-white h-9 shrink-0"
               disabled={requestApproval.isPending}
             >
-              {requestApproval.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "승인 요청 전송"}
+              {requestApproval.isPending
+                ? <><Loader2 className="h-4 w-4 animate-spin mr-1" />전송 중…</>
+                : "승인 요청 전송"}
             </Button>
-            <Button variant="ghost" size="icon" className="h-9 w-9" type="button" onClick={onClose}>
+            <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" type="button" onClick={onClose}>
               <X className="h-4 w-4" />
             </Button>
           </form>
         </div>
       </div>
+
+      {/* 에러 박스 — 실패 원인을 그대로 표시 */}
+      {errorMsg && (
+        <div className="rounded-lg bg-destructive/10 border border-destructive/20 px-3 py-2.5 flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-destructive mb-0.5">전송 실패 — 원인</p>
+            <p className="text-xs text-destructive/80 break-words">{errorMsg}</p>
+          </div>
+          <button
+            className="text-destructive/60 hover:text-destructive shrink-0"
+            onClick={() => setErrorMsg(null)}
+            type="button"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

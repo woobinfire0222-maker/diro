@@ -68,58 +68,86 @@ router.post("/", requireAuth, requireRole("counselor", "admin"), async (req: Req
 });
 
 // Developer: request approval from bini2222 via Discord DM
-router.post("/request-approval", requireAuth, requireRole("developer", "admin"), async (req: Request, res: Response) => {
-  try {
-    const user = req.authUser!;
-    const { order_id, amount } = req.body;
+router.post("/request-approval", requireAuth, requireRole("developer", "counselor", "admin"), async (req: Request, res: Response) => {
+  const user = req.authUser!;
+  const { order_id, amount } = req.body;
 
-    if (!order_id || !amount) {
-      res.status(400).json({ error: "order_id and amount are required" });
-      return;
-    }
-
-    const deeplink = `supertoss://send?bank=토스&accountNo=${TOSS_ACCOUNT}&amount=${Number(amount)}`;
-
-    // Create payment request with awaiting_approval status
-    const { data: payment, error } = await supabaseAdmin
-      .from("payment_requests")
-      .insert({
-        order_id,
-        counselor_id: user.id,
-        amount: Number(amount),
-        status: "awaiting_approval",
-        deeplink,
-      })
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    // Get order details for the DM message
-    const { data: order } = await supabaseAdmin
-      .from("orders")
-      .select("server_name, user_id")
-      .eq("id", order_id)
-      .single();
-
-    // Send Discord DM to bini2222 for approval
-    try {
-      await sendApprovalDM(
-        payment.id,
-        order_id,
-        Number(amount),
-        order?.server_name || "알 수 없음",
-        user.display_name || user.username || "개발자"
-      );
-    } catch (discordErr) {
-      // Don't fail the whole request if DM fails — log and continue
-      console.error("Discord DM failed:", discordErr);
-    }
-
-    res.status(201).json({ ...payment, discord_dm_sent: true });
-  } catch (err) {
-    res.status(500).json({ error: "Failed to request payment approval" });
+  if (!order_id || !amount || Number(amount) <= 0) {
+    res.status(400).json({ error: "order_id와 유효한 amount가 필요합니다." });
+    return;
   }
+
+  // ── 중복 결제 요청 방지 ────────────────────────────────────────────────
+  const { data: existing } = await supabaseAdmin
+    .from("payment_requests")
+    .select("id, status")
+    .eq("order_id", order_id)
+    .in("status", ["pending", "awaiting_approval", "approved"])
+    .maybeSingle();
+
+  if (existing) {
+    res.status(409).json({ error: "이미 처리 중인 결제 요청이 있습니다. 관리자 패널에서 확인해주세요." });
+    return;
+  }
+
+  // ── 결제 요청 생성 ────────────────────────────────────────────────────
+  const deeplink = `supertoss://send?bank=토스&accountNo=${TOSS_ACCOUNT}&amount=${Number(amount)}`;
+
+  const { data: payment, error: payErr } = await supabaseAdmin
+    .from("payment_requests")
+    .insert({
+      order_id,
+      counselor_id: user.id,
+      amount: Number(amount),
+      status: "awaiting_approval",
+      deeplink,
+      notes: `개발자(${user.username || user.display_name}) 가격 확정`,
+    })
+    .select()
+    .single();
+
+  if (payErr || !payment) {
+    res.status(500).json({ error: `결제 요청 생성 실패: ${payErr?.message ?? "알 수 없는 오류"}` });
+    return;
+  }
+
+  // ── 주문 상태 → payment_pending ───────────────────────────────────────
+  await supabaseAdmin
+    .from("orders")
+    .update({ status: "payment_pending", price: Number(amount), updated_at: new Date().toISOString() })
+    .eq("id", order_id);
+
+  // ── 주문 정보 조회 ────────────────────────────────────────────────────
+  const { data: order } = await supabaseAdmin
+    .from("orders")
+    .select("server_name, user_id, order_number")
+    .eq("id", order_id)
+    .single();
+
+  // ── Discord DM 전송 ───────────────────────────────────────────────────
+  let discordNotified = false;
+  let discordError: string | null = null;
+
+  try {
+    await sendApprovalDM(
+      payment.id,
+      order_id,
+      Number(amount),
+      order?.server_name || "알 수 없음",
+      user.display_name || user.username || "개발자",
+    );
+    discordNotified = true;
+  } catch (dmErr) {
+    const msg = (dmErr as Error).message || "Discord DM 전송 실패";
+    discordError = msg;
+    console.error("Discord DM 전송 실패:", msg);
+  }
+
+  res.status(201).json({
+    ...payment,
+    discord_notified: discordNotified,
+    discord_error: discordError,
+  });
 });
 
 // Update payment status
