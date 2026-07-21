@@ -942,6 +942,131 @@ export interface SiteCheckResult {
   detail: string;
 }
 
+// ─── 쿠키 시스템 ──────────────────────────────────────────────────────────────
+
+export interface CookieTransaction {
+  id: string;
+  user_id: string;
+  amount: number;           // 양수=획득, 음수=소모
+  type: "admin_grant" | "order_complete" | "spend" | "refund" | "admin_deduct";
+  description: string;
+  reference_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  // joined
+  created_by_username?: string | null;
+  created_by_display_name?: string | null;
+}
+
+/** 현재 유저의 쿠키 잔액 */
+export function useGetCookieBalance(options?: { query?: { enabled?: boolean } }) {
+  return useQuery<number>({
+    queryKey: ["cookieBalance"],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return 0;
+      const { data, error } = await supabase
+        .from("users")
+        .select("cookie_balance")
+        .eq("id", user.id)
+        .single();
+      if (error) throw error;
+      return (data as any).cookie_balance ?? 0;
+    },
+    enabled: options?.query?.enabled ?? true,
+    staleTime: 10_000,
+  });
+}
+
+/** 현재 유저의 쿠키 거래 내역 */
+export function useGetCookieTransactions(options?: { query?: { enabled?: boolean } }) {
+  return useQuery<CookieTransaction[]>({
+    queryKey: ["cookieTransactions"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("cookie_transactions")
+        .select("*, creator:users!created_by(username, display_name)")
+        .order("created_at", { ascending: false })
+        .limit(100);
+      if (error) throw error;
+      return (data ?? []).map((row: any) => ({
+        ...row,
+        creator: undefined,
+        created_by_username: row.creator?.username ?? null,
+        created_by_display_name: row.creator?.display_name ?? null,
+      })) as CookieTransaction[];
+    },
+    enabled: options?.query?.enabled ?? true,
+  });
+}
+
+/** 관리자: 특정 유저 쿠키 지급/차감 */
+export function useAdminGrantCookies() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      targetUserId,
+      amount,
+      description,
+      referenceId,
+    }: {
+      targetUserId: string;
+      amount: number;        // 양수=지급, 음수=차감
+      description: string;
+      referenceId?: string;
+    }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const type = amount >= 0 ? "admin_grant" : "admin_deduct";
+
+      const { error } = await supabase.from("cookie_transactions").insert({
+        user_id:      targetUserId,
+        amount,
+        type,
+        description:  description.trim(),
+        reference_id: referenceId ?? null,
+        created_by:   user.id,
+      });
+      if (error) throw new Error(error.message);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cookieBalance"] });
+      qc.invalidateQueries({ queryKey: ["cookieTransactions"] });
+      qc.invalidateQueries({ queryKey: ["adminUsers"] });
+    },
+  });
+}
+
+/** 관리자: 모든 유저의 쿠키 내역 조회 */
+export function useGetAllCookieTransactions(options?: { query?: { enabled?: boolean } }) {
+  return useQuery<(CookieTransaction & { target_username?: string; target_display_name?: string })[]>({
+    queryKey: ["allCookieTransactions"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("cookie_transactions")
+        .select(`
+          *,
+          target:users!user_id(username, display_name),
+          creator:users!created_by(username, display_name)
+        `)
+        .order("created_at", { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      return (data ?? []).map((row: any) => ({
+        ...row,
+        target: undefined,
+        creator: undefined,
+        target_username:       row.target?.username ?? null,
+        target_display_name:   row.target?.display_name ?? null,
+        created_by_username:   row.creator?.username ?? null,
+        created_by_display_name: row.creator?.display_name ?? null,
+      }));
+    },
+    enabled: options?.query?.enabled ?? true,
+  });
+}
+
 export function useRunSiteCheck() {
   return useMutation({
     mutationFn: async (): Promise<{ allOk: boolean; checks: SiteCheckResult[] }> => {

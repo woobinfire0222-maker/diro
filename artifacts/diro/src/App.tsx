@@ -19,6 +19,7 @@ import ServerEditorPage from "@/pages/ServerEditor";
 import AdminDashboard from "@/pages/AdminDashboard";
 import SuperAdminDashboard from "@/pages/SuperAdminDashboard";
 import SettingsPage from "@/pages/Settings";
+import CookiesPage from "@/pages/Cookies";
 import TermsPage from "@/pages/Terms";
 import PrivacyPolicyPage from "@/pages/PrivacyPolicy";
 import NotFound from "@/pages/not-found";
@@ -156,6 +157,10 @@ function Routes() {
 
       <Route path="/settings">
         <AppLayout><ProtectedRoute component={SettingsPage} /></AppLayout>
+      </Route>
+
+      <Route path="/cookies">
+        <AppLayout><ProtectedRoute component={CookiesPage} /></AppLayout>
       </Route>
 
       <Route>
