@@ -488,17 +488,33 @@ export function useMarkAllNotificationsRead() {
 export function useVerifyBot() {
   return useMutation({
     mutationFn: async (serverId: string) => {
-      // 봇이 bot_guilds 테이블에 자신이 들어간 서버를 기록해 둠 — 직접 조회
-      const { data, error } = await supabase
-        .from("bot_guilds")
-        .select("guild_id, guild_name")
-        .eq("guild_id", serverId)
-        .maybeSingle();
-      if (error) throw new Error(error.message);
+      // API 서버를 통해 봇이 해당 서버에 있는지 확인 (Discord REST API 직접 조회)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("로그인이 필요합니다.");
+
+      let res: Response;
+      try {
+        res = await fetch("/api/discord/verify", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ server_id: serverId }),
+        });
+      } catch (networkErr) {
+        throw new Error(`네트워크 오류: API 서버에 연결할 수 없습니다. (${(networkErr as Error).message})`);
+      }
+
+      const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+      if (!res.ok) {
+        throw new Error((body.error as string) || `HTTP ${res.status}`);
+      }
+
       return {
-        in_server:   !!data,
-        server_name: data?.guild_name ?? null,
-        error:       null,
+        in_server:   (body.in_server as boolean) ?? false,
+        server_name: (body.server_name as string | null) ?? null,
+        error:       (body.error as string | null) ?? null,
       };
     },
   });
@@ -507,52 +523,33 @@ export function useVerifyBot() {
 export function useApplyDiscord() {
   return useMutation({
     mutationFn: async ({ orderId, serverId }: { orderId: string; serverId: string }) => {
-      // 1. 주문에 서버 ID 저장 후 status = 'applying' 으로 변경 → 봇이 Realtime으로 감지
-      const { error: upErr } = await supabase
-        .from("orders")
-        .update({
-          discord_server_id: serverId,
-          status:            "applying",
-          updated_at:        new Date().toISOString(),
-        })
-        .eq("id", orderId);
-      if (upErr) throw new Error(upErr.message);
+      // API 서버를 통해 Discord에 서버 설정 직접 적용 (봇 Realtime 폴링 방식 제거)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("로그인이 필요합니다.");
 
-      // 2. 봇이 완료(completed / failed)로 업데이트할 때까지 최대 60초 폴링
-      for (let i = 0; i < 60; i++) {
-        await new Promise((r) => setTimeout(r, 1000));
-        const { data: order } = await supabase
-          .from("orders")
-          .select("status")
-          .eq("id", orderId)
-          .single();
+      let res: Response;
+      try {
+        res = await fetch("/api/discord/apply", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ order_id: orderId, server_id: serverId }),
+        });
+      } catch (networkErr) {
+        throw new Error(`네트워크 오류: API 서버에 연결할 수 없습니다. (${(networkErr as Error).message})`);
+      }
 
-        if (order?.status === "completed") {
-          // 봇이 server_projects.apply_result_json 에 결과를 기록
-          const { data: proj } = await supabase
-            .from("server_projects")
-            .select("apply_result_json")
-            .eq("order_id", orderId)
-            .single();
-          const result = proj?.apply_result_json
-            ? (JSON.parse(proj.apply_result_json) as { applied: string[]; errors: string[] })
-            : { applied: [], errors: [] };
-          return {
-            success:      true,
-            applied_items: result.applied ?? [],
-            error:        result.errors?.length ? result.errors.join(", ") : null,
-          };
-        }
-
-        if (order?.status === "failed") {
-          return { success: false, applied_items: [], error: "봇이 서버 설정 적용에 실패했습니다." };
-        }
+      const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+      if (!res.ok) {
+        throw new Error((body.error as string) || `HTTP ${res.status}`);
       }
 
       return {
-        success:      false,
-        applied_items: [],
-        error:        "타임아웃: 봇이 응답하지 않습니다. 봇이 실행 중인지 확인해주세요.",
+        success:       (body.success as boolean) ?? false,
+        applied_items: (body.applied_items as string[]) ?? [],
+        error:         (body.error as string | null) ?? null,
       };
     },
   });

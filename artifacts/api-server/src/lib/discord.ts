@@ -137,8 +137,8 @@ export function initDiscordBot(): void {
 
   const client = getDiscordClient();
 
-  client.once("ready", () => {
-    logger.info({ tag: client.user?.tag }, "Discord bot ready");
+  client.once("clientReady", (readyClient) => {
+    logger.info({ tag: readyClient.user.tag }, "Discord bot ready");
   });
 
   client.on("interactionCreate", async (interaction) => {
