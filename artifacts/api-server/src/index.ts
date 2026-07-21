@@ -1,5 +1,4 @@
 import app from "./app";
-import { logger } from "./lib/logger";
 import { initDiscordBot } from "./lib/discord.js";
 
 const rawPort = process.env["PORT"];
@@ -18,16 +17,16 @@ if (Number.isNaN(port) || port <= 0) {
 
 app.listen(port, (err) => {
   if (err) {
-    logger.error({ err }, "Error listening on port");
+    console.error("Error listening on port:", err);
     process.exit(1);
   }
 
-  logger.info({ port }, "Server listening");
+  console.log(`[${new Date().toISOString()}] Server listening on port ${port}`);
 
   // Initialize Discord bot for interaction handling (approve/reject buttons)
   try {
     initDiscordBot();
   } catch (e) {
-    logger.warn({ e }, "Discord bot initialization skipped");
+    console.warn("Discord bot initialization skipped:", e);
   }
 });

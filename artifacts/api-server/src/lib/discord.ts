@@ -8,7 +8,6 @@ import {
   ButtonStyle,
   EmbedBuilder,
 } from "discord.js";
-import { logger } from "./logger.js";
 import { supabaseAdmin } from "./supabase.js";
 
 const botToken = process.env.DISCORD_BOT_TOKEN;
@@ -26,7 +25,7 @@ export function getDiscordClient(): Client {
       intents: [GatewayIntentBits.Guilds, GatewayIntentBits.DirectMessages],
     });
     discordClient.login(botToken).catch((err) => {
-      logger.error({ err }, "Failed to login Discord bot");
+      console.error("Failed to login Discord bot:", err);
     });
   }
   return discordClient;
@@ -48,7 +47,7 @@ export async function verifyBotInServer(serverId: string): Promise<{ inServer: b
     const guild = await rest.get(Routes.guild(serverId)) as { name: string };
     return { inServer: true, serverName: guild.name };
   } catch (err: unknown) {
-    const error = err as { status?: number };
+    const error = err as { status?: number; message?: string };
     if (error.status === 403 || error.status === 404) {
       return { inServer: false, serverName: null };
     }
@@ -75,7 +74,7 @@ export async function sendApprovalDM(
     .single();
 
   if (!biniUser?.discord_id) {
-    logger.warn("bini2222 not found in users table or has no discord_id – cannot send DM");
+    console.warn("bini2222 not found in users table or has no discord_id – cannot send DM");
     throw new Error("bini2222 계정을 찾을 수 없습니다. bini2222이 DIRO에 로그인한 적이 있어야 합니다.");
   }
 
@@ -92,7 +91,7 @@ export async function sendApprovalDM(
     });
   }
 
-  const discordUser = await client.users.fetch(biniUser.discord_id);
+  const discordUser = await client.users.fetch(biniUser.discord_id as string);
 
   const embed = new EmbedBuilder()
     .setTitle("🔔 DIRO 결제 승인 요청")
@@ -119,7 +118,7 @@ export async function sendApprovalDM(
   );
 
   await discordUser.send({ embeds: [embed], components: [row] });
-  logger.info({ paymentId, orderId }, "Approval DM sent to bini2222");
+  console.log(`Approval DM sent to bini2222 — paymentId:${paymentId} orderId:${orderId}`);
 }
 
 /**
@@ -131,14 +130,14 @@ export function initDiscordBot(): void {
   botInitialized = true;
 
   if (!botToken) {
-    logger.warn("DISCORD_BOT_TOKEN not set – Discord bot disabled");
+    console.warn("DISCORD_BOT_TOKEN not set – Discord bot disabled");
     return;
   }
 
   const client = getDiscordClient();
 
   client.once("clientReady", (readyClient) => {
-    logger.info({ tag: readyClient.user.tag }, "Discord bot ready");
+    console.log(`Discord bot ready: ${readyClient.user.tag}`);
   });
 
   client.on("interactionCreate", async (interaction) => {
@@ -206,9 +205,9 @@ export function initDiscordBot(): void {
           content: `✅ **승인 완료!** 신청자에게 송금 알림이 전송되었습니다.\n토스 계좌: \`190839534245\``,
           flags: 64,
         });
-        logger.info({ paymentId }, "Payment approved via Discord button");
+        console.log(`Payment approved via Discord button — paymentId:${paymentId}`);
       } catch (err) {
-        logger.error({ err }, "Error approving payment via Discord");
+        console.error("Error approving payment via Discord:", err);
         try {
           await interaction.reply({ content: "❌ 처리 중 오류가 발생했습니다.", flags: 64 });
         } catch { /* already replied */ }
@@ -221,9 +220,9 @@ export function initDiscordBot(): void {
           .eq("id", paymentId);
 
         await interaction.reply({ content: "❌ **거절 완료.** 개발자에게 별도로 알려주세요.", flags: 64 });
-        logger.info({ paymentId }, "Payment rejected via Discord button");
+        console.log(`Payment rejected via Discord button — paymentId:${paymentId}`);
       } catch (err) {
-        logger.error({ err }, "Error rejecting payment via Discord");
+        console.error("Error rejecting payment via Discord:", err);
         try {
           await interaction.reply({ content: "❌ 처리 중 오류가 발생했습니다.", flags: 64 });
         } catch { /* already replied */ }
@@ -231,7 +230,7 @@ export function initDiscordBot(): void {
     }
   });
 
-  logger.info("Discord bot initialized and listening for interactions");
+  console.log("Discord bot initialized and listening for interactions");
 }
 
 export interface ServerConfig {
@@ -303,7 +302,7 @@ export async function applyServerConfig(
           roleIdMap[role.id] = created.id;
           appliedItems.push(`역할: ${role.name}`);
         } catch (e) {
-          logger.error({ e }, `Failed to create role ${role.name}`);
+          console.error(`Failed to create role ${role.name}`);
         }
       }
     }
@@ -323,7 +322,7 @@ export async function applyServerConfig(
           categoryIdMap[category.id] = created.id;
           appliedItems.push(`카테고리: ${category.name}`);
         } catch (e) {
-          logger.error({ e }, `Failed to create category ${category.name}`);
+          console.error(`Failed to create category ${category.name}`);
         }
       }
     }
@@ -358,7 +357,7 @@ export async function applyServerConfig(
           });
           appliedItems.push(`채널: ${channel.name}`);
         } catch (e) {
-          logger.error({ e }, `Failed to create channel ${channel.name}`);
+          console.error(`Failed to create channel ${channel.name}`);
         }
       }
     }

@@ -488,33 +488,17 @@ export function useMarkAllNotificationsRead() {
 export function useVerifyBot() {
   return useMutation({
     mutationFn: async (serverId: string) => {
-      // API 서버를 통해 봇이 해당 서버에 있는지 확인 (Discord REST API 직접 조회)
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("로그인이 필요합니다.");
-
-      let res: Response;
-      try {
-        res = await fetch("/api/discord/verify", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ server_id: serverId }),
-        });
-      } catch (networkErr) {
-        throw new Error(`네트워크 오류: API 서버에 연결할 수 없습니다. (${(networkErr as Error).message})`);
-      }
-
-      const body = await res.json().catch(() => ({})) as Record<string, unknown>;
-      if (!res.ok) {
-        throw new Error((body.error as string) || `HTTP ${res.status}`);
-      }
-
+      // 봇이 guildCreate/Delete 이벤트마다 bot_guilds 테이블을 갱신 — 직접 조회
+      const { data, error } = await supabase
+        .from("bot_guilds")
+        .select("guild_id, guild_name")
+        .eq("guild_id", serverId)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
       return {
-        in_server:   (body.in_server as boolean) ?? false,
-        server_name: (body.server_name as string | null) ?? null,
-        error:       (body.error as string | null) ?? null,
+        in_server:   !!data,
+        server_name: data?.guild_name ?? null,
+        error:       null,
       };
     },
   });
@@ -523,33 +507,63 @@ export function useVerifyBot() {
 export function useApplyDiscord() {
   return useMutation({
     mutationFn: async ({ orderId, serverId }: { orderId: string; serverId: string }) => {
-      // API 서버를 통해 Discord에 서버 설정 직접 적용 (봇 Realtime 폴링 방식 제거)
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("로그인이 필요합니다.");
+      // 1. 주문에 서버 ID 저장 후 status = 'applying' 으로 변경 → 봇이 Realtime으로 감지
+      const { error: upErr } = await supabase
+        .from("orders")
+        .update({
+          discord_server_id: serverId,
+          status:            "applying",
+          updated_at:        new Date().toISOString(),
+        })
+        .eq("id", orderId);
+      if (upErr) throw new Error(upErr.message);
 
-      let res: Response;
-      try {
-        res = await fetch("/api/discord/apply", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ order_id: orderId, server_id: serverId }),
-        });
-      } catch (networkErr) {
-        throw new Error(`네트워크 오류: API 서버에 연결할 수 없습니다. (${(networkErr as Error).message})`);
-      }
+      // 2. 봇이 완료(completed / failed)로 업데이트할 때까지 최대 60초 폴링
+      for (let i = 0; i < 60; i++) {
+        await new Promise((r) => setTimeout(r, 1000));
+        const { data: order } = await supabase
+          .from("orders")
+          .select("status")
+          .eq("id", orderId)
+          .single();
 
-      const body = await res.json().catch(() => ({})) as Record<string, unknown>;
-      if (!res.ok) {
-        throw new Error((body.error as string) || `HTTP ${res.status}`);
+        if (order?.status === "completed") {
+          const { data: proj } = await supabase
+            .from("server_projects")
+            .select("apply_result_json")
+            .eq("order_id", orderId)
+            .single();
+          const result = proj?.apply_result_json
+            ? (JSON.parse(proj.apply_result_json) as { applied: string[]; errors: string[] })
+            : { applied: [], errors: [] };
+          return {
+            success:       true,
+            applied_items: result.applied ?? [],
+            error:         result.errors?.length ? result.errors.join(", ") : null,
+          };
+        }
+
+        if (order?.status === "failed") {
+          const { data: proj } = await supabase
+            .from("server_projects")
+            .select("apply_result_json")
+            .eq("order_id", orderId)
+            .single();
+          const result = proj?.apply_result_json
+            ? (JSON.parse(proj.apply_result_json) as { applied: string[]; errors: string[] })
+            : { applied: [], errors: [] };
+          return {
+            success:       false,
+            applied_items: result.applied ?? [],
+            error:         result.errors?.length ? result.errors.join(", ") : "봇이 서버 설정 적용에 실패했습니다.",
+          };
+        }
       }
 
       return {
-        success:       (body.success as boolean) ?? false,
-        applied_items: (body.applied_items as string[]) ?? [],
-        error:         (body.error as string | null) ?? null,
+        success:       false,
+        applied_items: [],
+        error:         "타임아웃: 봇이 응답하지 않습니다. 봇이 실행 중인지 확인해주세요.",
       };
     },
   });
@@ -721,46 +735,60 @@ export interface PaymentRequest {
   client_display_name?: string | null;
 }
 
-/** 개발자: API 서버를 통해 결제 승인 요청 전송 + Discord DM */
+const TOSS_ACCOUNT = "190839534245";
+
+/** 개발자: Supabase에 결제 승인 요청 직접 저장 → 봇이 Realtime으로 감지해 Discord DM 전송 */
 export function useRequestPaymentApproval() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ orderId, amount }: { orderId: string; amount: number }) => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("로그인이 필요합니다.");
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("로그인이 필요합니다.");
 
-      let res: Response;
-      try {
-        res = await fetch("/api/payments/request-approval", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ order_id: orderId, amount }),
-        });
-      } catch (networkErr) {
-        throw new Error(`네트워크 오류: API 서버에 연결할 수 없습니다. (${(networkErr as Error).message})`);
-      }
+      // 중복 결제 요청 방지
+      const { data: existing } = await supabase
+        .from("payment_requests")
+        .select("id, status")
+        .eq("order_id", orderId)
+        .in("status", ["pending", "awaiting_approval", "approved"])
+        .maybeSingle();
+      if (existing) throw new Error("이미 처리 중인 결제 요청이 있습니다. 관리자 패널에서 확인해주세요.");
 
-      let body: Record<string, unknown> = {};
-      try {
-        body = await res.json();
-      } catch {
-        throw new Error(`서버 응답 파싱 실패 (HTTP ${res.status})`);
-      }
+      const deeplink = `supertoss://send?bank=토스&accountNo=${TOSS_ACCOUNT}&amount=${Number(amount)}`;
 
-      if (!res.ok) {
-        // 서버에서 보낸 상세 에러 메시지를 그대로 던짐
-        const detail = (body?.detail as string) || (body?.error as string) || `HTTP ${res.status}`;
-        throw new Error(detail);
-      }
+      const { data: userRecord } = await supabase
+        .from("users")
+        .select("username, display_name")
+        .eq("id", user.id)
+        .single();
 
+      const { data: payment, error: payErr } = await supabase
+        .from("payment_requests")
+        .insert({
+          order_id:     orderId,
+          counselor_id: user.id,
+          amount:       Number(amount),
+          status:       "awaiting_approval",
+          deeplink,
+          notes:        `개발자(${userRecord?.username || userRecord?.display_name || "개발자"}) 가격 확정`,
+        })
+        .select()
+        .single();
+
+      if (payErr || !payment) throw new Error(payErr?.message ?? "결제 요청 생성 실패");
+
+      // 주문 가격 업데이트 (status는 봇이 DM 전송 후 payment_pending으로 변경)
+      await supabase
+        .from("orders")
+        .update({ price: Number(amount), updated_at: new Date().toISOString() })
+        .eq("id", orderId);
+
+      // 봇이 Realtime으로 awaiting_approval 감지 → bini2222에게 Discord DM 전송
       return {
-        success: true,
-        payment_request_id: (body.id as string) ?? "",
-        discord_notified: (body.discord_notified as boolean) ?? false,
-        discord_error: (body.discord_error as string | null) ?? null,
+        success:            true,
+        payment_request_id: payment.id,
+        discord_notified:   false, // 봇이 비동기로 처리
+        discord_error:      null,
       };
     },
     onSuccess: () => {

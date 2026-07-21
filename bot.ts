@@ -10,7 +10,16 @@
  */
 
 import "dotenv/config";
-import { Client, GatewayIntentBits, REST, Routes } from "discord.js";
+import {
+  Client,
+  GatewayIntentBits,
+  REST,
+  Routes,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  EmbedBuilder,
+} from "discord.js";
 import { createClient } from "@supabase/supabase-js";
 
 // ── 환경 변수 ─────────────────────────────────────────────────────────────────
@@ -27,7 +36,11 @@ if (!TOKEN || !SUPA_URL || !SUPA_KEY) {
 const supabase = createClient(SUPA_URL, SUPA_KEY);
 const rest     = new REST({ version: "10" }).setToken(TOKEN);
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const TOSS_ACCOUNT = "190839534245";
+
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.DirectMessages],
+});
 
 // ── 서버 목록 동기화 ──────────────────────────────────────────────────────────
 
@@ -315,6 +328,175 @@ async function applyConfig(serverId: string, rawConfig: any) {
 
   return { applied, errors };
 }
+
+// ── Discord 버튼 인터랙션: 결제 승인 / 거절 ───────────────────────────────────
+
+client.on("interactionCreate", async (interaction) => {
+  if (!interaction.isButton()) return;
+
+  const colonIdx = interaction.customId.indexOf(":");
+  if (colonIdx === -1) return;
+
+  const action    = interaction.customId.slice(0, colonIdx);
+  const paymentId = interaction.customId.slice(colonIdx + 1);
+
+  if (action === "approve") {
+    try {
+      const { data: payment, error } = await supabase
+        .from("payment_requests")
+        .update({ status: "approved", updated_at: new Date().toISOString() })
+        .eq("id", paymentId)
+        .select()
+        .single();
+
+      if (error || !payment) {
+        await interaction.reply({ content: "❌ 오류: 결제 정보를 찾을 수 없습니다.", flags: 64 });
+        return;
+      }
+
+      await supabase
+        .from("orders")
+        .update({ status: "payment_pending", updated_at: new Date().toISOString() })
+        .eq("id", payment.order_id);
+
+      const { data: order } = await supabase
+        .from("orders")
+        .select("user_id, order_number, server_name")
+        .eq("id", payment.order_id)
+        .single();
+
+      if (order) {
+        await supabase.from("order_messages").insert({
+          order_id:      payment.order_id,
+          sender_id:     payment.counselor_id,
+          content:       `₩${Number(payment.amount).toLocaleString()} 송금 요청이 도착했습니다.`,
+          type:          "payment",
+          metadata_json: JSON.stringify({
+            amount:     payment.amount,
+            deeplink:   payment.deeplink,
+            payment_id: paymentId,
+          }),
+        });
+
+        await supabase.from("notifications").insert({
+          user_id:      order.user_id,
+          type:         "payment_request",
+          title:        `₩${Number(payment.amount).toLocaleString()} 결제 요청`,
+          body:         "채팅에서 송금하기 버튼을 눌러주세요",
+          reference_id: payment.order_id,
+        });
+      }
+
+      await interaction.reply({
+        content: `✅ **승인 완료!** 신청자에게 송금 알림이 전송되었습니다.\n토스 계좌: \`${TOSS_ACCOUNT}\``,
+        flags:   64,
+      });
+      console.log(`✅ 결제 승인 완료: ${paymentId}`);
+    } catch (e) {
+      console.error("결제 승인 처리 오류:", (e as Error).message);
+      try { await interaction.reply({ content: "❌ 처리 중 오류가 발생했습니다.", flags: 64 }); } catch { /* already replied */ }
+    }
+
+  } else if (action === "reject") {
+    try {
+      await supabase
+        .from("payment_requests")
+        .update({ status: "cancelled", updated_at: new Date().toISOString() })
+        .eq("id", paymentId);
+
+      await interaction.reply({ content: "❌ **거절 완료.** 개발자에게 별도로 알려주세요.", flags: 64 });
+      console.log(`❌ 결제 거절 완료: ${paymentId}`);
+    } catch (e) {
+      console.error("결제 거절 처리 오류:", (e as Error).message);
+      try { await interaction.reply({ content: "❌ 처리 중 오류가 발생했습니다.", flags: 64 }); } catch { /* already replied */ }
+    }
+  }
+});
+
+// ── Realtime: payment_requests.status = 'awaiting_approval' → bini2222 DM ────
+
+supabase
+  .channel("payments-approval")
+  .on(
+    "postgres_changes",
+    { event: "INSERT", schema: "public", table: "payment_requests", filter: "status=eq.awaiting_approval" },
+    async (payload) => {
+      const payment = payload.new as {
+        id:           string;
+        order_id:     string;
+        amount:       number;
+        counselor_id: string;
+        notes:        string | null;
+      };
+
+      console.log(`\n🔔 결제 승인 요청: ${payment.id} — ₩${Number(payment.amount).toLocaleString()}`);
+
+      try {
+        // bini2222의 discord_id 조회
+        const { data: biniUser } = await supabase
+          .from("users")
+          .select("discord_id, username")
+          .eq("username", "bini2222")
+          .single();
+
+        if (!biniUser?.discord_id) {
+          console.warn("bini2222 discord_id 없음 — DM 전송 불가");
+          return;
+        }
+
+        // 주문 정보 조회
+        const { data: order } = await supabase
+          .from("orders")
+          .select("server_name, user_id")
+          .eq("id", payment.order_id)
+          .single();
+
+        const developerName = payment.notes?.match(/개발자\((.+?)\)/)?.[1] ?? "개발자";
+
+        if (!client.isReady()) {
+          await new Promise<void>((resolve) => {
+            const t = setTimeout(() => resolve(), 5000);
+            client.once("clientReady", () => { clearTimeout(t); resolve(); });
+          });
+        }
+
+        const discordUser = await client.users.fetch(biniUser.discord_id);
+
+        const embed = new EmbedBuilder()
+          .setTitle("🔔 DIRO 결제 승인 요청")
+          .setColor(0x5865F2)
+          .setDescription("개발자가 가격을 확정했습니다. 승인하면 신청자에게 송금 알림이 전송됩니다.")
+          .addFields(
+            { name: "📌 서버명",  value: order?.server_name ?? "알 수 없음", inline: true },
+            { name: "💰 금액",    value: `₩${Number(payment.amount).toLocaleString()}`, inline: true },
+            { name: "👨‍💻 개발자", value: developerName, inline: true },
+            { name: "🏦 토스 계좌", value: TOSS_ACCOUNT, inline: false },
+          )
+          .setTimestamp()
+          .setFooter({ text: `주문 ID: ${payment.order_id.slice(0, 8)}…` });
+
+        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`approve:${payment.id}`)
+            .setLabel("✅ 승인")
+            .setStyle(ButtonStyle.Success),
+          new ButtonBuilder()
+            .setCustomId(`reject:${payment.id}`)
+            .setLabel("❌ 거절")
+            .setStyle(ButtonStyle.Danger),
+        );
+
+        await discordUser.send({ embeds: [embed], components: [row] });
+        console.log(`✅ bini2222에게 결제 승인 DM 전송 완료: ${payment.id}`);
+      } catch (e) {
+        console.error("결제 DM 전송 오류:", (e as Error).message);
+      }
+    },
+  )
+  .subscribe((status) => {
+    if (status === "SUBSCRIBED")    console.log("✅ Realtime 연결됨 — 결제 승인 대기 중");
+    if (status === "CHANNEL_ERROR") console.error("❌ Realtime 연결 실패 (payments-approval)");
+  });
 
 // ── Realtime: orders.status = 'applying' 감지 ────────────────────────────────
 
