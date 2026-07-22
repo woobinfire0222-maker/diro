@@ -1,47 +1,64 @@
-# DIRO — Discord Server Management Platform
+# DIRO (디로)
 
-A premium Discord server creation/management platform ("프리미엄 Discord 서버 제작 플랫폼") built with a React + Vite frontend and an Express API backend.
+A premium Discord server custom-creation platform. Users log in, submit server orders, and chat with counselors who build the server using a Discord-like editor. The finished structure is applied to a real Discord server via bot.
 
 ## Stack
 
 | Layer | Technology |
-|---|---|
-| Frontend | React 19, Vite, Tailwind CSS, shadcn/ui, Wouter (routing), TanStack Query |
-| Backend | Express 5, Node.js 24, Pino logging, Discord.js 14 |
-| Database | Supabase (PostgreSQL) |
-| Auth | Supabase Auth (email/password) |
+|-------|-----------|
+| Frontend | React 19 + Vite + TailwindCSS v4 + Framer Motion + Wouter |
+| Backend | Node.js + Express (ESM, built with esbuild) |
+| Database | Supabase (PostgreSQL via Drizzle ORM) |
+| Auth | Supabase Auth (email/password + Discord OAuth2) |
+| Realtime | Supabase Realtime (WebSocket) |
+| Bot | Discord.js (standalone `bot.ts` + embedded in API server) |
+| Shared libs | `lib/api-spec`, `lib/api-zod`, `lib/api-client-react`, `lib/db` |
 
-## Project layout
+## Artifacts / Services
 
+| Artifact | Path | Port env var | Dev command |
+|----------|------|-------------|-------------|
+| Frontend (DIRO web app) | `artifacts/diro` | `PORT` | `pnpm --filter @workspace/diro run dev` |
+| Backend (API Server) | `artifacts/api-server` | `PORT` | `pnpm --filter @workspace/api-server run dev` |
+| Mockup sandbox | `artifacts/mockup-sandbox` | `PORT` | `pnpm --filter @workspace/mockup-sandbox run dev` |
+
+## How to run
+
+All three workflows are managed by Replit automatically. The main ones are:
+
+- **`artifacts/diro: web`** — React frontend (preview at `/`)
+- **`artifacts/api-server: API Server`** — Express API (preview at `/api`)
+
+Install dependencies from the workspace root:
+```bash
+pnpm install
 ```
-artifacts/
-  diro/          — React frontend (preview path: /)
-  api-server/    — Express API server (preview path: /api)
-  mockup-sandbox/ — Canvas/design preview server
-```
 
-## Running the project
+## Required Secrets (Replit Secrets)
 
-Both services start automatically via the configured workflows:
-- **DIRO (frontend)**: `pnpm --filter @workspace/diro run dev`
-- **API Server**: `pnpm --filter @workspace/api-server run dev`
+| Secret | Description |
+|--------|-------------|
+| `SUPABASE_URL` | Supabase project URL |
+| `SUPABASE_ANON_KEY` | Supabase anon/public key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (admin operations) |
+| `SUPABASE_DATABASE_URL` | PostgreSQL connection string (with real password) |
+| `VITE_SUPABASE_URL` | Same as `SUPABASE_URL` — exposed to Vite frontend |
+| `VITE_SUPABASE_ANON_KEY` | Same as `SUPABASE_ANON_KEY` — exposed to Vite frontend |
+| `DISCORD_BOT_TOKEN` | Discord bot token for server integration |
 
-## Required secrets
-
-All set in Replit Secrets:
-
-| Secret | Where to find it |
-|---|---|
-| `SUPABASE_URL` | Supabase → Project Settings → API |
-| `SUPABASE_ANON_KEY` | Supabase → Project Settings → API |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API |
-| `DISCORD_BOT_TOKEN` | Discord Developer Portal → Your App → Bot → Token |
+> **Note:** `DATABASE_URL` is reserved by Replit's runtime. This project uses `SUPABASE_DATABASE_URL` instead (see `lib/db/src/index.ts`).
 
 ## Database schema
 
-See `diro_schema.sql` at the project root for the full Supabase schema.
+The Supabase schema lives in `diro_schema.sql`. Run it in the Supabase SQL Editor to create all tables.
+
+## Standalone Discord bot
+
+`bot.ts` at the repo root is a standalone bot runner (separate from the embedded bot in the API server). Run with:
+```bash
+npx tsx bot.ts
+```
 
 ## User preferences
 
-- Keep the existing monorepo structure (pnpm workspace)
-- Korean-language UI is intentional
+- Keep existing project structure and stack — do not restructure unless asked.
